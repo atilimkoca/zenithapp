@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Zenith Fitness",
+    "slug": "zenithapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zenithfitness.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Bu uygulama profil fotoğrafı çekmek için kameraya erişim gerektirir.",
+        "NSPhotoLibraryUsageDescription": "Bu uygulama profil fotoğrafı seçmek için fotoğraf galerisine erişim gerektirir."
+      }
+    },
+    "android": {
+      "package": "com.zenithfitness.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "com.google.android.c2dm.permission.RECEIVE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bu uygulama profil fotoğrafı seçmek için fotoğraf galerisine erişim gerektirir.",
+          "cameraPermission": "Bu uygulama profil fotoğrafı çekmek için kameraya erişim gerektirir."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6B7F6A",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
+        }
+      ]
+    ]
+  }
+}
