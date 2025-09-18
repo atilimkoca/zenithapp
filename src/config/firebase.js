@@ -3,16 +3,18 @@ import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Your Firebase configuration
-// Replace these values with your actual Firebase project configuration
+// Firebase configuration using environment variables
+// IMPORTANT: Never commit real Firebase keys to version control
+// For development, create a .env file with your actual values
+// For production, set these in your deployment environment
 const firebaseConfig = {
-  apiKey: "AIzaSyC6FKMNQ_rPfquTGlX6my6Uzl1f8DX-NAE",
-  authDomain: "zenithstudio-97468.firebaseapp.com",
-  projectId: "zenithstudio-97468",
-  storageBucket: "zenithstudio-97468.firebasestorage.app",
-  messagingSenderId: "179316789546",
-  appId: "1:179316789546:web:2bf32cdfd1b2dce4fe8e53",
-  measurementId: "G-LJJV69FS3Y"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "your-api-key-here",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "your-domain.firebaseapp.com", 
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "your-project-id",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "your-bucket.firebasestorage.app",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "your-sender-id",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "your-app-id",
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "your-measurement-id"
 };
 
 // Initialize Firebase
