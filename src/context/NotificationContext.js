@@ -4,6 +4,27 @@ import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext();
 
+// Helper function to deduplicate notifications
+const deduplicateNotifications = (notifications) => {
+  const seen = new Map();
+  const unique = [];
+  
+  for (const notification of notifications) {
+    // Create a unique key based on id, title, and content
+    const key = notification.id || 
+      `${notification.title || ''}_${notification.body || notification.message || ''}_${notification.createdAt?.seconds || Date.now()}`;
+    
+    if (!seen.has(key)) {
+      seen.set(key, true);
+      unique.push(notification);
+    } else {
+      console.log('🔄 Duplicate notification filtered:', { key, title: notification.title });
+    }
+  }
+  
+  return unique;
+};
+
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -57,13 +78,14 @@ export const NotificationProvider = ({ children }) => {
   const setupNotificationListener = () => {
     if (!user?.uid) return;
 
-
     const unsubscribeFn = notificationService.listenToUserNotifications(
       user.uid,
       (result) => {
         
         if (result.success) {
-          setNotifications(result.notifications);
+          // Deduplicate notifications by ID and content
+          const uniqueNotifications = deduplicateNotifications(result.notifications);
+          setNotifications(uniqueNotifications);
           setUnreadCount(result.unreadCount);
         } else {
           console.error('❌ NotificationContext: Listener error:', result.message);
@@ -89,11 +111,13 @@ export const NotificationProvider = ({ children }) => {
       
       if (result.success) {
         
-        setNotifications(result.notifications);
+        // Deduplicate notifications
+        const uniqueNotifications = deduplicateNotifications(result.notifications);
+        setNotifications(uniqueNotifications);
         setLastDoc(result.lastDoc);
         setHasMore(result.hasMore);
         
-        const unreadCount = result.notifications.filter(notif => !notif.isRead).length;
+        const unreadCount = uniqueNotifications.filter(notif => !notif.isRead).length;
         setUnreadCount(unreadCount);
         
       } else {
@@ -114,7 +138,12 @@ export const NotificationProvider = ({ children }) => {
       const result = await notificationService.getUserNotifications(user.uid, 20, lastDoc);
       
       if (result.success) {
-        setNotifications(prev => [...prev, ...result.notifications]);
+        // Deduplicate new notifications and merge with existing
+        const uniqueNewNotifications = deduplicateNotifications(result.notifications);
+        setNotifications(prev => {
+          const combined = [...prev, ...uniqueNewNotifications];
+          return deduplicateNotifications(combined);
+        });
         setLastDoc(result.lastDoc);
         setHasMore(result.hasMore);
         
@@ -127,8 +156,10 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const markAsRead = async (notificationId) => {
+    if (!user?.uid) return;
+    
     try {
-      const result = await notificationService.markAsRead(notificationId);
+      const result = await notificationService.markAsRead(notificationId, user.uid);
       
       if (result.success) {
         // Update local state optimistically

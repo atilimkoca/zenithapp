@@ -8,25 +8,37 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { useNotifications } from '../context/NotificationContext';
-import UniqueHeader from '../components/UniqueHeader';
+import BottomSheetModal from '../components/BottomSheetModal';
 
-export default function NotificationScreen({ navigation }) {
+export default function NotificationScreen({ navigation, visible, onClose, route }) {
+  const notificationContext = useNotifications();
+  
+  if (!notificationContext) {
+    console.error('NotificationContext not available');
+    return null;
+  }
+
   const {
-    notifications,
-    unreadCount,
-    loading,
-    hasMore,
+    notifications = [],
+    unreadCount = 0,
+    loading = false,
+    hasMore = false,
     markAsRead,
     markAllAsRead,
     loadMoreNotifications,
     refreshNotifications,
-  } = useNotifications();
+  } = notificationContext;
 
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Determine if this is being used as a modal or navigation screen
+  const isModal = visible !== undefined;
+  const isVisible = isModal ? visible : true;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -203,65 +215,213 @@ export default function NotificationScreen({ navigation }) {
     </View>
   );
 
+  // If used as modal
+  if (isModal) {
+    return (
+      <BottomSheetModal
+        visible={isVisible}
+        onClose={onClose}
+        title="Bildirimler"
+        subtitle={`${unreadCount || 0} okunmamış bildirim`}
+        accentIcon="notifications-outline"
+        maxHeightRatio={0.85}
+        footer={
+          unreadCount > 0 ? (
+            <TouchableOpacity
+              style={styles.markAllReadButton}
+              onPress={handleMarkAllAsRead}
+            >
+              <Ionicons name="checkmark-done-outline" size={20} color={colors.white} />
+              <Text style={styles.markAllReadText}>Tümünü Okundu İşaretle</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={[
+            styles.scrollContent,
+            (loading && (!notifications || notifications.length === 0)) || (!notifications || notifications.length === 0) ? styles.scrollContentCenter : null
+          ]}
+        >
+          {loading && (!notifications || notifications.length === 0) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
+            </View>
+          ) : !notifications || notifications.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <>
+              {notifications.map((item) => (
+                <View key={item.id || Math.random().toString()}>
+                  {renderNotification({ item })}
+                </View>
+              ))}
+              {renderLoadMoreButton()}
+            </>
+          )}
+        </ScrollView>
+      </BottomSheetModal>
+    );
+  }
+
+  // If used as navigation screen (full screen)
   return (
     <View style={styles.container}>
-      <UniqueHeader
-        title="Bildirimler"
-        subtitle={`${unreadCount} okunmamış bildirim`}
-        leftIcon="arrow-back"
-        rightIcon="checkmark-done-outline"
-        onLeftPress={() => navigation.goBack()}
-        onRightPress={handleMarkAllAsRead}
-        showNotification={false}
-      />
-
-      <View style={styles.content}>
-        {notifications.length === 0 && !loading ? (
-          renderEmptyState()
-        ) : (
-          <FlatList
-            data={notifications}
-            keyExtractor={(item) => item.id}
-            renderItem={renderNotification}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
-              />
-            }
-            ListFooterComponent={renderLoadMoreButton}
-            contentContainerStyle={styles.listContainer}
-          />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Bildirimler</Text>
+          <Text style={styles.headerSubtitle}>{unreadCount || 0} okunmamış bildirim</Text>
+        </View>
+        {unreadCount > 0 && (
+          <TouchableOpacity onPress={handleMarkAllAsRead} style={styles.headerButton}>
+            <Ionicons name="checkmark-done-outline" size={24} color={colors.primary} />
+          </TouchableOpacity>
         )}
       </View>
+
+      <ScrollView
+        style={styles.fullScreenContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+        contentContainerStyle={[
+          styles.scrollContent,
+          (loading && (!notifications || notifications.length === 0)) || (!notifications || notifications.length === 0) ? styles.scrollContentCenter : null
+        ]}
+      >
+        {loading && (!notifications || notifications.length === 0) ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Bildirimler yükleniyor...</Text>
+          </View>
+        ) : !notifications || notifications.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <>
+            {notifications.map((item) => (
+              <View key={item.id || Math.random().toString()}>
+                {renderNotification({ item })}
+              </View>
+            ))}
+            {renderLoadMoreButton()}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Full screen styles
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: 60,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.transparentGreenLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenContent: {
     flex: 1,
     backgroundColor: colors.background,
-    marginTop: -15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
   },
-  listContainer: {
-    padding: 20,
+  
+  // Modal and shared styles
+  scrollContent: {
+    paddingBottom: 20,
+    paddingHorizontal: 0,
+  },
+  scrollContentCenter: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  markAllReadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  markAllReadText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   
   // Notification Card Styles
   notificationCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: colors.black,
     shadowOffset: {
       width: 0,

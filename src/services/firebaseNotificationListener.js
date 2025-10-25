@@ -4,8 +4,8 @@ import { db } from '../config/firebase';
 
 // Service specifically for handling Firebase notifications and triggering local notifications
 export const firebaseNotificationListener = {
-  // Track which notifications we've already seen to detect new ones
-  seenNotificationIds: new Set(),
+  // Track which notifications we've already seen to detect new ones (shared global)
+  seenNotificationIds: (global.__zenith_seen_notifications = global.__zenith_seen_notifications || new Set()),
   isInitialized: false,
 
   // Setup real-time listener for user notifications from web admin panel
@@ -32,31 +32,31 @@ export const firebaseNotificationListener = {
       limit(50)
     );
 
-    // Function to handle new notifications
-    const handleNewNotifications = (notifications, queryType) => {
+  // Function to handle new notifications
+  const handleNewNotifications = async (notifications, queryType) => {
       if (!firebaseNotificationListener.isInitialized) {
-        // On initial load, just track existing notifications
+        // On initial load, just track existing notifications to avoid historic triggers
         notifications.forEach(notif => {
           firebaseNotificationListener.seenNotificationIds.add(notif.id);
         });
         return;
       }
 
-      // Check for truly new notifications
+      // Check for truly new notifications (and skip ones already seen by other listeners)
       const newNotifications = notifications.filter(notif => {
-        return !firebaseNotificationListener.seenNotificationIds.has(notif.id) && 
-               !notif.isRead; // Only show unread notifications
+        return !firebaseNotificationListener.seenNotificationIds.has(notif.id) && !notif.isRead;
       });
 
       if (newNotifications.length > 0) {
-        
-        newNotifications.forEach(async (notif) => {
-          // Add to seen set
+        for (const notif of newNotifications) {
+          // Add to shared seen set and trigger local notification
           firebaseNotificationListener.seenNotificationIds.add(notif.id);
-          
-          // Trigger local notification
-          await firebaseNotificationListener.triggerLocalNotification(notif, queryType);
-        });
+          try {
+            await firebaseNotificationListener.triggerLocalNotification(notif, queryType);
+          } catch (err) {
+            console.error('Failed triggering local notification for', notif.id, err);
+          }
+        }
       }
     };
 
@@ -111,7 +111,7 @@ export const firebaseNotificationListener = {
     return () => {
       unsubscribeUser();
       unsubscribeBroadcast();
-      firebaseNotificationListener.seenNotificationIds.clear();
+      // Do not clear shared seenNotificationIds here - other listeners may rely on it
       firebaseNotificationListener.isInitialized = false;
     };
   },

@@ -36,8 +36,8 @@ export const adminService = {
     }
   },
 
-  // Approve a user
-  approveUser: async (userId, adminId) => {
+  // Approve a user with package assignment
+  approveUser: async (userId, adminId, packageData = null) => {
     try {
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
@@ -50,19 +50,53 @@ export const adminService = {
       }
       
       const userData = userDoc.data();
+      const now = new Date();
       
-      await setDoc(userRef, {
+      // Calculate package expiry date (30 days from now)
+      const expiryDate = new Date(now);
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      
+      const updateData = {
         ...userData,
         status: 'approved',
         isActive: true,
-        approvedAt: new Date().toISOString(),
+        approvedAt: now.toISOString(),
         approvedBy: adminId,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+        updatedAt: now.toISOString()
+      };
+      
+      // If package is assigned during approval
+      if (packageData && packageData.id) {
+        // Extract lesson count - try multiple field names for compatibility
+        const lessonCount = packageData.lessonCount || packageData.lessons || packageData.classes || 0;
+        
+        updateData.packageInfo = {
+          packageId: packageData.id,
+          packageName: packageData.name || 'Bilinmeyen Paket',
+          lessonCount: lessonCount,
+          assignedAt: now.toISOString(),
+          expiryDate: expiryDate.toISOString()
+        };
+        updateData.remainingClasses = lessonCount;
+        updateData.lessonCredits = lessonCount;
+      } else {
+        // Set expiry date even without package
+        updateData.packageInfo = {
+          packageId: null,
+          packageName: 'Paket Atanmadı',
+          lessonCount: 0,
+          assignedAt: now.toISOString(),
+          expiryDate: expiryDate.toISOString()
+        };
+        updateData.remainingClasses = 0;
+        updateData.lessonCredits = 0;
+      }
+      
+      await setDoc(userRef, updateData, { merge: true });
       
       return {
         success: true,
-        message: 'Kullanıcı başarıyla onaylandı.'
+        message: 'Kullanıcı başarıyla onaylandı ve paket atandı.'
       };
     } catch (error) {
       console.error('Error approving user:', error);
@@ -70,6 +104,75 @@ export const adminService = {
         success: false,
         error: error.code,
         message: 'Kullanıcı onaylanırken hata oluştu.'
+      };
+    }
+  },
+
+  // Renew user package
+  renewUserPackage: async (userId, packageData, adminId) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        return {
+          success: false,
+          message: 'Kullanıcı bulunamadı.'
+        };
+      }
+      
+      // Validate package data
+      if (!packageData || !packageData.id) {
+        return {
+          success: false,
+          message: 'Geçersiz paket verisi.'
+        };
+      }
+
+      // Extract lesson count - try multiple field names for compatibility
+      const lessonCount = packageData.lessonCount || packageData.lessons || packageData.classes || 0;
+      
+      if (lessonCount <= 0) {
+        console.warn('⚠️ Package has no lessons:', packageData);
+        return {
+          success: false,
+          message: 'Paket ders sayısı belirtilmemiş. Lütfen paketi kontrol edin.'
+        };
+      }
+      
+      const userData = userDoc.data();
+      const now = new Date();
+      
+      // Calculate new expiry date (30 days from now)
+      const expiryDate = new Date(now);
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      
+      const updateData = {
+        packageInfo: {
+          packageId: packageData.id,
+          packageName: packageData.name || 'Bilinmeyen Paket',
+          lessonCount: lessonCount,
+          assignedAt: now.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          renewedBy: adminId
+        },
+        remainingClasses: lessonCount,
+        lessonCredits: lessonCount,
+        updatedAt: now.toISOString()
+      };
+      
+      await setDoc(userRef, updateData, { merge: true });
+      
+      return {
+        success: true,
+        message: 'Paket başarıyla yenilendi.'
+      };
+    } catch (error) {
+      console.error('Error renewing package:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Paket yenilenirken hata oluştu.'
       };
     }
   },
@@ -164,10 +267,15 @@ export const adminService = {
       const users = [];
       
       querySnapshot.forEach((doc) => {
-        users.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        const userData = doc.data();
+        
+        // Only include regular users (members), exclude admins and trainers
+        if (userData.role !== 'admin' && userData.role !== 'instructor') {
+          users.push({
+            id: doc.id,
+            ...userData
+          });
+        }
       });
       
       return {
@@ -260,6 +368,65 @@ export const adminService = {
         success: false,
         error: error.code,
         message: 'Kullanıcı silinirken hata oluştu.'
+      };
+    }
+  },
+
+  // Get user statistics for admin dashboard
+  getUserStats: async () => {
+    try {
+      const q = query(collection(db, 'users'));
+      const querySnapshot = await getDocs(q);
+      
+      let total = 0;
+      let pending = 0;
+      let approved = 0;
+      let rejected = 0;
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Only count regular users (members), exclude admins and trainers
+        if (data.role === 'admin' || data.role === 'instructor') {
+          return; // Skip admins and trainers
+        }
+        
+        total++;
+        
+        switch (data.status) {
+          case 'pending':
+            pending++;
+            break;
+          case 'approved':
+            approved++;
+            break;
+          case 'rejected':
+            rejected++;
+            break;
+          default:
+            // Count users without status as approved (legacy users)
+            if (!data.status) {
+              approved++;
+            }
+            break;
+        }
+      });
+      
+      return {
+        success: true,
+        data: {
+          total,
+          pending,
+          approved,
+          rejected
+        }
+      };
+    } catch (error) {
+      console.error('Error getting user stats:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Kullanıcı istatistikleri alınırken hata oluştu.'
       };
     }
   }

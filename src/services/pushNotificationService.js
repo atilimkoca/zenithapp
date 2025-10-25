@@ -6,14 +6,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getExpoPushToken } from '../utils/expoPushTokenHelper';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Note: Notification handler is set in fcmService.js to avoid duplicates
 
 export const pushNotificationService = {
   // Register for push notifications and get token
@@ -294,16 +287,25 @@ export const pushNotificationService = {
 
 // Export notification event listeners for App.js
 export const setupNotificationListeners = () => {
+  // Prevent duplicate registration
+  if (global.__zenith_notification_listeners_registered) {
+    console.warn('⚠️ Notification listeners already registered - skipping duplicate registration');
+    return () => {
+      // No-op cleanup because original cleanup is still responsible for removal
+      return;
+    };
+  }
+
   // Listener for notifications received while app is in foreground
   const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+    // Intentionally left blank - app can react via NotificationContext if needed
   });
 
   // Listener for when user taps on a notification
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-    
-    const data = response.notification.request.content.data;
-    
-    // Handle different notification types
+    const data = response.notification.request.content.data || {};
+
+    // Handle different notification types (navigation should be handled by app's router)
     if (data.type === 'lesson') {
       // Navigate to lessons screen
     } else if (data.type === 'credit') {
@@ -313,9 +315,17 @@ export const setupNotificationListeners = () => {
     }
   });
 
-  // Return cleanup function
+  // Mark as registered so subsequent calls are no-ops
+  global.__zenith_notification_listeners_registered = true;
+
+  // Return cleanup function that also clears the global flag
   return () => {
-    foregroundSubscription.remove();
-    responseSubscription.remove();
+    try {
+      if (foregroundSubscription && typeof foregroundSubscription.remove === 'function') foregroundSubscription.remove();
+      if (responseSubscription && typeof responseSubscription.remove === 'function') responseSubscription.remove();
+    } catch (e) {
+      console.warn('Error removing notification listeners during cleanup', e);
+    }
+    delete global.__zenith_notification_listeners_registered;
   };
 };

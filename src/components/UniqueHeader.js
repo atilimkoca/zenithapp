@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
@@ -63,7 +64,11 @@ export default function UniqueHeader({
                 ) : (
                   <View style={styles.brandContainer}>
                     <View style={styles.brandIcon}>
-                      <Text style={styles.brandText}>Z</Text>
+                      <Image 
+                        source={require('../../assets/zenith_logo_rounded.png')} 
+                        style={styles.logoImage}
+                        resizeMode="cover"
+                      />
                     </View>
                     <View style={styles.brandDot} />
                   </View>
@@ -129,11 +134,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   headerContainer: {
-    paddingBottom: 40,
+    paddingBottom: 24,
     position: 'relative',
     overflow: 'hidden',
-    borderBottomLeftRadius: 35,
-    borderBottomRightRadius: 35,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     shadowColor: colors.black,
     shadowOffset: {
       width: 0,
@@ -189,8 +194,8 @@ const styles = StyleSheet.create({
   },
   
   headerContent: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     position: 'relative',
     zIndex: 10,
   },
@@ -198,8 +203,8 @@ const styles = StyleSheet.create({
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    minHeight: 50,
+    marginBottom: 12,
+    minHeight: 40,
   },
   
   leftSection: {
@@ -220,11 +225,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    overflow: 'hidden',
   },
-  brandText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.white,
+  logoImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   brandDot: {
     width: 8,
@@ -248,20 +254,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.white,
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 2,
     textAlign: 'center',
   },
   
@@ -273,9 +279,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -311,9 +317,9 @@ const styles = StyleSheet.create({
   },
   
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -323,49 +329,49 @@ const styles = StyleSheet.create({
   
   // Stats section
   statsSection: {
-    marginTop: 20,
+    marginTop: 12,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   statCard: {
     alignItems: 'center',
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginHorizontal: 6,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-    borderRadius: 25,
+    marginHorizontal: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.25)',
     position: 'relative',
     overflow: 'hidden',
   },
   statIconWrapper: {
-    marginBottom: 10,
+    marginBottom: 6,
   },
   statIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.white,
-    marginBottom: 2,
+    marginBottom: 1,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: 'rgba(255, 255, 255, 0.95)',
     fontWeight: '600',
     textAlign: 'center',

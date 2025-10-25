@@ -14,6 +14,7 @@ import {
   Dimensions,
   Platform,
   Linking,
+  SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -270,10 +271,27 @@ export default function ProfileScreen({ navigation }) {
 
   const handleLanguageSelect = async (languageCode) => {
     try {
+      // Prepare success message in target language before changing
+      const successMessages = {
+        en: {
+          title: 'Success',
+          message: 'Language changed successfully!'
+        },
+        tr: {
+          title: 'Başarılı',
+          message: 'Dil başarıyla değiştirildi!'
+        }
+      };
+      
+      const targetMessage = successMessages[languageCode];
+      
       await changeLanguage(languageCode);
       setLanguageModalVisible(false);
-      const languageName = languageCode === 'tr' ? 'Türkçe' : 'English';
-      Alert.alert(t('success'), `${t('profile.language')} ${languageName} olarak değiştirildi.`);
+      
+      // Show success message in the target language
+      setTimeout(() => {
+        Alert.alert(targetMessage.title, targetMessage.message);
+      }, 100);
     } catch (error) {
       console.error('Error changing language:', error);
       Alert.alert(t('error'), t('errors.languageChangeError'));
@@ -536,8 +554,7 @@ export default function ProfileScreen({ navigation }) {
       <UniqueHeader
         title={t('profile.title')} 
         subtitle={t('profile.subtitle')}
-        rightIcon="settings-outline"
-        onRightPress={() => {}}
+        showNotification={false}
       />
 
       <ScrollView 
@@ -545,19 +562,15 @@ export default function ProfileScreen({ navigation }) {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.innerContent}>
           {/* Profile Card */}
           <View style={styles.profileCard}>
-            <TouchableOpacity 
-              style={styles.profileImageContainer}
-              onPress={handleImageSelection}
-            >
+            <View style={styles.profileImageContainer}>
               {renderProfileImage()}
-              <View style={styles.editImageBadge}>
-                <Ionicons name="camera" size={16} color={colors.white} />
-              </View>
-            </TouchableOpacity>
+            </View>
 
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>
@@ -667,6 +680,7 @@ export default function ProfileScreen({ navigation }) {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* Admin Panel Button - Only for admin and instructor roles */}
           {/* Logout Button */}
           <TouchableOpacity 
             style={styles.logoutButton}
@@ -925,6 +939,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollContent: {
+    paddingBottom: 100, // Add bottom padding to avoid navigation bar
+  },
   innerContent: {
     padding: 20,
   },
@@ -1111,7 +1128,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Reduced opacity
+    backgroundColor: 'transparent', // Remove gray background
   },
   modalContent: {
     backgroundColor: colors.white,

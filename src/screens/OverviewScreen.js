@@ -126,7 +126,7 @@ export default function OverviewScreen({ navigation }) {
   };
 
   const handleOpenLocation = () => {
-    const address = 'Maltepe, MithatpaÅŸa Cd. No:197, 35310 GÃ¼zelbahÃ§e/Ä°zmir';
+    const address = 'Maltepe, Mithatpaşa Cd. No:197, 35310 Güzelbahçe/İzmir';
     const encodedAddress = encodeURIComponent(address);
     
     // Try to open in Google Maps first, then Apple Maps as fallback
@@ -149,10 +149,7 @@ export default function OverviewScreen({ navigation }) {
       });
   };
 
-  const handleLessonPress = (lesson) => {
-    // Navigate to lesson details or booking screen
-    navigation.navigate('ClassSelection', { lessonId: lesson.id });
-  };
+
 
   const formatLessonTime = (lesson) => {
     try {
@@ -225,10 +222,9 @@ export default function OverviewScreen({ navigation }) {
     const timeInfo = formatLessonTime(lesson);
     
     return (
-      <TouchableOpacity 
+      <View 
         key={lesson.id} 
         style={styles.classCard}
-        onPress={() => handleLessonPress(lesson)}
       >
         <View style={styles.classInfo}>
           <View style={styles.classHeader}>
@@ -265,14 +261,7 @@ export default function OverviewScreen({ navigation }) {
             )}
           </View>
         </View>
-        <View style={styles.joinButtonContainer}>
-          <TouchableOpacity style={styles.joinButton}>
-            <Text style={styles.joinButtonText}>
-              {t('overview.details') || 'Details'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -306,7 +295,7 @@ export default function OverviewScreen({ navigation }) {
             <Text style={styles.sectionTitle}>
               {t('overview.upcomingLessons') || 'Upcoming Classes'}
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ClassHistory')}>
+            <TouchableOpacity onPress={() => navigation.navigate('ClassSelection')}>
               <Text style={styles.seeAllText}>
                 {t('overview.seeAll') || 'See All'}
               </Text>
@@ -361,7 +350,7 @@ export default function OverviewScreen({ navigation }) {
               <View style={styles.contactItem}>
                 <Ionicons name="location-outline" size={18} color={colors.primary} />
                 <Text style={styles.contactText}>
-                  Maltepe, MithatpaÅŸa Cd. No:197{'\n'}35310 GÃ¼zelbahÃ§e/Ä°zmir
+                  Maltepe, Mithatpaşa Cd. No:197{'\n'}35310 Güzelbahçe/İzmir
                 </Text>
               </View>
               <View style={styles.contactItem}>

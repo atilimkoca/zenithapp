@@ -43,49 +43,76 @@ export const notificationService = {
       ]);
       
       const notifications = [];
+      const seenIds = new Set(); // Track unique notification IDs
+      const seenContent = new Set(); // Track unique content hashes
+      
+      // Helper function to create content hash for deduplication
+      const createContentHash = (title, message, type, createdAt) => {
+        const timestamp = createdAt?.seconds || Math.floor(new Date(createdAt).getTime() / 1000);
+        return `${title}_${message}_${type}_${Math.floor(timestamp / 60)}`; // Group by minute
+      };
       
       // Process user-specific notifications
       userSpecificSnapshot.forEach((doc) => {
         const data = doc.data();
-        notifications.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-          isRead: data.isRead || false,
-          type: data.type || 'general'
-        });
+        const id = doc.id;
+        const contentHash = createContentHash(data.title, data.message || data.body, data.type, data.createdAt);
+        
+        if (!seenIds.has(id) && !seenContent.has(contentHash)) {
+          seenIds.add(id);
+          seenContent.add(contentHash);
+          notifications.push({
+            id: id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+            isRead: data.isRead || false,
+            type: data.type || 'general'
+          });
+        } else {
+          console.log('🔄 Filtered duplicate user notification:', { id, contentHash, title: data.title });
+        }
       });
       
       // Process broadcast notifications
       broadcastSnapshot.forEach((doc) => {
         const data = doc.data();
-        notifications.push({
-          id: doc.id,
-          ...data,
-          userId: userId, // Add userId for consistency
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-          isRead: data.isRead || false,
-          type: data.type === 'info' ? 'general' : (data.type || 'general'), // Convert 'info' to 'general'
-          recipients: data.recipients
-        });
+        const id = doc.id;
+        const contentHash = createContentHash(data.title, data.message || data.body, data.type, data.createdAt);
+        
+        if (!seenIds.has(id) && !seenContent.has(contentHash)) {
+          seenIds.add(id);
+          seenContent.add(contentHash);
+          // For broadcast notifications, check if user has read it
+          const readBy = data.readBy || [];
+          const isReadByUser = readBy.includes(userId);
+          
+          notifications.push({
+            id: id,
+            ...data,
+            userId: userId, // Add userId for consistency
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+            isRead: isReadByUser, // Check if this specific user has read it
+            type: data.type === 'info' ? 'general' : (data.type || 'general'), // Convert 'info' to 'general'
+            recipients: data.recipients
+          });
+        } else {
+          console.log('🔄 Filtered duplicate broadcast notification:', { id, contentHash, title: data.title });
+        }
       });
 
-      // Remove duplicates and sort manually on client side (newest first)
-      const uniqueNotifications = notifications.filter((notif, index, self) => 
-        index === self.findIndex(n => n.id === notif.id)
-      );
-      
-      uniqueNotifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Sort manually on client side (newest first)
+      notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       
       // Limit after sorting
-      const limitedNotifications = uniqueNotifications.slice(0, limitCount);
+      const limitedNotifications = notifications.slice(0, limitCount);
       
+      console.log(`📱 Loaded ${limitedNotifications.length} unique notifications (filtered from ${userSpecificSnapshot.size + broadcastSnapshot.size})`);
       
       return {
         success: true,
         notifications: limitedNotifications,
         lastDoc: null, // Disable pagination for fallback
-        hasMore: uniqueNotifications.length > limitCount,
+        hasMore: notifications.length > limitCount,
         usingFallback: true
       };
       
@@ -122,21 +149,46 @@ export const notificationService = {
       let broadcastNotifications = [];
 
       const processNotifications = (isInitialLoad = false) => {
-        const allNotifications = [
-          ...userNotifications.map(n => ({ ...n, source: 'user-specific' })),
-          ...broadcastNotifications.map(n => ({ 
-            ...n, 
-            userId: userId, // Add userId for consistency
-            source: 'broadcast',
-            type: n.type === 'info' ? 'general' : (n.type || 'general')
-          }))
-        ];
-
-        // Remove duplicates and sort
-        const uniqueNotifications = allNotifications.filter((notif, index, self) => 
-          index === self.findIndex(n => n.id === notif.id)
-        );
+        // Create unique notification map with better deduplication
+        const notificationMap = new Map();
+        const contentHashes = new Set();
         
+        // Helper function to create content hash
+        const createContentHash = (title, message, type, createdAt) => {
+          const timestamp = createdAt?.getTime ? Math.floor(createdAt.getTime() / 1000) : Math.floor(new Date(createdAt).getTime() / 1000);
+          return `${title}_${message}_${type}_${Math.floor(timestamp / 60)}`; // Group by minute
+        };
+        
+        // Process user-specific notifications
+        userNotifications.forEach(notif => {
+          const contentHash = createContentHash(notif.title, notif.message || notif.body, notif.type, notif.createdAt);
+          if (!notificationMap.has(notif.id) && !contentHashes.has(contentHash)) {
+            notificationMap.set(notif.id, { ...notif, source: 'user-specific' });
+            contentHashes.add(contentHash);
+          }
+        });
+        
+        // Process broadcast notifications
+        broadcastNotifications.forEach(notif => {
+          const contentHash = createContentHash(notif.title, notif.message || notif.body, notif.type, notif.createdAt);
+          if (!notificationMap.has(notif.id) && !contentHashes.has(contentHash)) {
+            // For broadcast notifications, check if user has read it
+            const readBy = notif.readBy || [];
+            const isReadByUser = readBy.includes(userId);
+            
+            notificationMap.set(notif.id, { 
+              ...notif, 
+              userId: userId, // Add userId for consistency
+              source: 'broadcast',
+              isRead: isReadByUser, // Check if this specific user has read it
+              type: notif.type === 'info' ? 'general' : (notif.type || 'general')
+            });
+            contentHashes.add(contentHash);
+          }
+        });
+        
+        // Convert map to array and sort
+        const uniqueNotifications = Array.from(notificationMap.values());
         uniqueNotifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
         // NOTE: Removed local notification triggering to prevent duplicates
@@ -144,6 +196,7 @@ export const notificationService = {
 
         const unreadCount = uniqueNotifications.filter(notif => !notif.isRead).length;
         
+        console.log(`📱 Processed ${uniqueNotifications.length} unique notifications from ${userNotifications.length + broadcastNotifications.length} total`);
         
         callback({
           success: true,
@@ -201,14 +254,37 @@ export const notificationService = {
   },
 
   // Mark notification as read
-  markAsRead: async (notificationId) => {
+  markAsRead: async (notificationId, userId) => {
     try {
       
       const notificationRef = doc(db, 'notifications', notificationId);
-      await updateDoc(notificationRef, {
-        isRead: true,
-        readAt: new Date()
-      });
+      const notificationDoc = await getDoc(notificationRef);
+      
+      if (!notificationDoc.exists()) {
+        return {
+          success: false,
+          message: 'Bildirim bulunamadı.'
+        };
+      }
+      
+      const notificationData = notificationDoc.data();
+      
+      // If it's a broadcast notification (recipients: 'all'), use readBy array
+      if (notificationData.recipients === 'all') {
+        const readBy = notificationData.readBy || [];
+        if (!readBy.includes(userId)) {
+          readBy.push(userId);
+          await updateDoc(notificationRef, {
+            readBy: readBy
+          });
+        }
+      } else {
+        // For user-specific notifications, use isRead flag
+        await updateDoc(notificationRef, {
+          isRead: true,
+          readAt: new Date()
+        });
+      }
 
       
       return {
@@ -229,20 +305,49 @@ export const notificationService = {
   markAllAsRead: async (userId) => {
     try {
       
-      const q = query(
+      // Get user-specific unread notifications
+      const userQuery = query(
         collection(db, 'notifications'),
         where('userId', '==', userId),
         where('isRead', '==', false)
       );
 
-      const querySnapshot = await getDocs(q);
-      
-      const promises = querySnapshot.docs.map(docRef => 
-        updateDoc(docRef.ref, {
-          isRead: true,
-          readAt: new Date()
-        })
+      // Get broadcast notifications
+      const broadcastQuery = query(
+        collection(db, 'notifications'),
+        where('recipients', '==', 'all')
       );
+
+      const [userSnapshot, broadcastSnapshot] = await Promise.all([
+        getDocs(userQuery),
+        getDocs(broadcastQuery)
+      ]);
+      
+      const promises = [];
+      
+      // Mark user-specific notifications as read
+      userSnapshot.docs.forEach(docRef => {
+        promises.push(
+          updateDoc(docRef.ref, {
+            isRead: true,
+            readAt: new Date()
+          })
+        );
+      });
+      
+      // Mark broadcast notifications as read for this user
+      broadcastSnapshot.docs.forEach(docRef => {
+        const data = docRef.data();
+        const readBy = data.readBy || [];
+        if (!readBy.includes(userId)) {
+          readBy.push(userId);
+          promises.push(
+            updateDoc(docRef.ref, {
+              readBy: readBy
+            })
+          );
+        }
+      });
 
       await Promise.all(promises);
       

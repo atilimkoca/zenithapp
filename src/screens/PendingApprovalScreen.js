@@ -15,11 +15,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../constants/colors';
 import { logoutUser } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../context/I18nContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function PendingApprovalScreen() {
   const { user, setUserData, setApprovalStatus } = useAuth();
+  const { t } = useI18n();
   const [pulseAnim] = useState(new Animated.Value(1));
   const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -53,12 +55,12 @@ export default function PendingApprovalScreen() {
 
   const handleLogout = async () => {
     Alert.alert(
-      'Çıkış Yap',
-      'Çıkış yapmak istediğinizden emin misiniz? Onay durumunuzu daha sonra kontrol edebilirsiniz.',
+      t('pendingApproval.logoutPrompt'),
+      t('pendingApproval.logoutConfirm'),
       [
-        { text: 'İptal', style: 'cancel' },
+        { text: t('pendingApproval.cancel'), style: 'cancel' },
         { 
-          text: 'Çıkış Yap', 
+          text: t('pendingApproval.logout'), 
           style: 'destructive',
           onPress: async () => {
             try {
@@ -93,8 +95,8 @@ export default function PendingApprovalScreen() {
                   resizeMode="contain"
                 />
               </View>
-              <Text style={styles.studioName}>Zénith Studio</Text>
-              <Text style={styles.studioSubtitle}>Pilates + Yoga</Text>
+              <Text style={styles.studioName}>{t('pendingApproval.studioName')}</Text>
+              <Text style={styles.studioSubtitle}>{t('pendingApproval.studioSubtitle')}</Text>
             </View>
 
             {/* Main Status Card */}
@@ -110,27 +112,26 @@ export default function PendingApprovalScreen() {
                 </View>
               </Animated.View>
               
-              <Text style={styles.statusTitle}>Onay Bekleniyor</Text>
+              <Text style={styles.statusTitle}>{t('pendingApproval.title')}</Text>
               
               <Text style={styles.statusMessage}>
-                Merhaba! Zénith ailesine hoş geldiniz. 
+                {t('pendingApproval.welcomeMessage')}
                 {'\n\n'}
-                Hesabınız başarıyla oluşturuldu ve şu anda onay bekleniyor. 
-                Bu süreç genellikle kısa sürer.
+                {t('pendingApproval.accountCreated')} {t('pendingApproval.processNote')}
               </Text>
 
               {/* Info Cards */}
               <View style={styles.infoContainer}>
                 <View style={styles.infoCard}>
                   <Text style={styles.infoIcon}>⚡</Text>
-                  <Text style={styles.infoTitle}>Hızlı İşlem</Text>
-                  <Text style={styles.infoText}>Genellikle 24 saat içinde</Text>
+                  <Text style={styles.infoTitle}>{t('pendingApproval.quickProcessing')}</Text>
+                  <Text style={styles.infoText}>{t('pendingApproval.quickProcessingDetail')}</Text>
                 </View>
                 
                 <View style={styles.infoCard}>
                   <Text style={styles.infoIcon}>🔔</Text>
-                  <Text style={styles.infoTitle}>Otomatik Güncelleme</Text>
-                  <Text style={styles.infoText}>Onay sonrası erişim</Text>
+                  <Text style={styles.infoTitle}>{t('pendingApproval.autoUpdate')}</Text>
+                  <Text style={styles.infoText}>{t('pendingApproval.autoUpdateDetail')}</Text>
                 </View>
               </View>
 
@@ -140,7 +141,7 @@ export default function PendingApprovalScreen() {
                   <View style={[styles.stepCircle, styles.stepCompleted]}>
                     <Text style={styles.stepNumber}>✓</Text>
                   </View>
-                  <Text style={styles.stepText}>Kayıt Tamamlandı</Text>
+                  <Text style={styles.stepText}>{t('pendingApproval.registrationComplete')}</Text>
                 </View>
                 
                 <View style={styles.stepLine} />
@@ -149,7 +150,7 @@ export default function PendingApprovalScreen() {
                   <View style={[styles.stepCircle, styles.stepActive]}>
                     <Text style={styles.stepNumber}>2</Text>
                   </View>
-                  <Text style={styles.stepText}>Onay Bekleniyor</Text>
+                  <Text style={styles.stepText}>{t('pendingApproval.awaitingApproval')}</Text>
                 </View>
                 
                 <View style={styles.stepLine} />
@@ -158,7 +159,7 @@ export default function PendingApprovalScreen() {
                   <View style={styles.stepCircle}>
                     <Text style={styles.stepNumber}>3</Text>
                   </View>
-                  <Text style={styles.stepText}>Uygulama Erişimi</Text>
+                  <Text style={styles.stepText}>{t('pendingApproval.appAccess')}</Text>
                 </View>
               </View>
             </View>
@@ -166,11 +167,11 @@ export default function PendingApprovalScreen() {
             {/* Bottom Section */}
             <View style={styles.bottomSection}>
               <Text style={styles.helpText}>
-                Sorularınız için 7/24 destek hattımızdan bize ulaşabilirsiniz
+                {t('pendingApproval.supportMessage')}
               </Text>
               
               <TouchableOpacity onPress={handleLogout} style={styles.logoutLink}>
-                <Text style={styles.logoutText}>Çıkış Yap</Text>
+                <Text style={styles.logoutText}>{t('pendingApproval.logout')}</Text>
               </TouchableOpacity>
             </View>
             

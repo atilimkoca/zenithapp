@@ -1,9 +1,19 @@
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, arrayUnion, arrayRemove, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { bookingHistoryService } from './bookingHistoryService';
 
 // Helper function to fetch trainers data
-const fetchTrainersData = async () => {
+const TRAINERS_CACHE_TTL = 60 * 1000; // 60 seconds
+let trainersCache = null;
+let trainersCacheTimestamp = 0;
+
+const fetchTrainersData = async (options = {}) => {
+  const forceRefresh = typeof options === 'boolean' ? options : options.forceRefresh;
+
+  if (!forceRefresh && trainersCache && Date.now() - trainersCacheTimestamp < TRAINERS_CACHE_TTL) {
+    return trainersCache;
+  }
+
   try {
     const trainersQuery = query(
       collection(db, 'users'),
@@ -26,6 +36,9 @@ const fetchTrainersData = async () => {
       };
     });
     
+    trainersCache = trainersMap;
+    trainersCacheTimestamp = Date.now();
+
     return trainersMap;
   } catch (error) {
     console.error('❌ Error fetching trainers:', error);
@@ -417,16 +430,49 @@ export const lessonService = {
   bookLesson: async (lessonId, userId) => {
     try {
       
+      // Check if user membership is frozen
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Check if membership is cancelled
+        if (userData.membershipStatus === 'cancelled' || userData.status === 'cancelled') {
+          return {
+            success: false,
+            messageKey: 'classes.membershipCancelled'
+          };
+        }
+        
+        // Check if membership is frozen
+        if (userData.membershipStatus === 'frozen' || userData.status === 'frozen') {
+          return {
+            success: false,
+            messageKey: 'classes.membershipFrozen'
+          };
+        }
+        
+        // Check if membership is inactive
+        if (userData.membershipStatus === 'inactive' || userData.status === 'inactive') {
+          return {
+            success: false,
+            messageKey: 'classes.membershipInactive'
+          };
+        }
+      }
+      
       // Import lessonCreditsService
       const { lessonCreditsService } = await import('./lessonCreditsService');
       
-      // First check if user has enough credits
+      // Check if user has enough credits
       const creditCheck = await lessonCreditsService.checkUserCanBook(userId);
       
       if (!creditCheck.success || !creditCheck.canBook) {
         return {
           success: false,
-          message: creditCheck.message || 'Yetersiz ders kredisi. Lütfen ders paketi satın alın.'
+          messageKey: creditCheck.messageKey || 'classes.insufficientCredits',
+          message: creditCheck.message // Keep backward compatibility
         };
       }
       
@@ -492,7 +538,7 @@ export const lessonService = {
         
         return {
           success: true,
-          message: 'Lesson booking completed successfully!',
+          messageKey: 'classSelection.bookingSuccessMessage',
           remainingCredits: creditResult.remainingCredits
         };
       } catch (bookingError) {
@@ -765,3 +811,555 @@ const getClassBenefits = (lessonTitle, lessonTypeInfo) => {
   if (titleLower.includes('reformer')) return ['Full Body Conditioning', 'Muscle Definition'];
   return ['General Fitness'];
 };
+
+// Admin-specific methods for lesson management
+const adminLessonService = {
+  // Get all lessons for admin
+  getAllLessons: async () => {
+    try {
+      const lessonsQuery = query(
+        collection(db, 'lessons'),
+        orderBy('scheduledDate', 'desc')
+      );
+
+      const [querySnapshot, trainersMap] = await Promise.all([
+        getDocs(lessonsQuery),
+        fetchTrainersData()
+      ]);
+
+      const lessons = querySnapshot.docs.map((lessonDoc) => {
+        const data = lessonDoc.data();
+        const trainer = data.trainerId ? trainersMap[data.trainerId] : null;
+
+        const participants = data.participants || data.enrolledStudents || [];
+        const currentParticipants = data.currentParticipants ?? participants.length;
+
+        return {
+          id: lessonDoc.id,
+          ...data,
+          trainerName:
+            trainer?.displayName ||
+            data.trainerName ||
+            'Bilinmeyen Eğitmen',
+          enrolledStudents: data.enrolledStudents || [],
+          participants,
+          currentParticipants,
+        };
+      });
+
+      return {
+        success: true,
+        lessons,
+      };
+    } catch (error) {
+      console.error('Error getting all lessons:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Dersler alınırken hata oluştu.'
+      };
+    }
+  },
+
+  // Cancel a lesson
+  cancelLesson: async (lessonId, adminId) => {
+    try {
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const lessonDoc = await getDoc(lessonRef);
+      
+      if (!lessonDoc.exists()) {
+        return {
+          success: false,
+          message: 'Ders bulunamadı.'
+        };
+      }
+      
+      await updateDoc(lessonRef, {
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: adminId,
+        updatedAt: new Date().toISOString()
+      });
+      
+      return {
+        success: true,
+        message: 'Ders başarıyla iptal edildi.'
+      };
+    } catch (error) {
+      console.error('Error cancelling lesson:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Ders iptal edilirken hata oluştu.'
+      };
+    }
+  },
+
+  // Create a new lesson
+  createLesson: async (lessonData) => {
+    try {
+      const {
+        participants,
+        enrolledStudents,
+        currentParticipants,
+        createdAt,
+        updatedAt,
+        ...rest
+      } = lessonData;
+
+      const payload = {
+        ...rest,
+        participants: Array.isArray(participants) ? participants : [],
+        enrolledStudents: Array.isArray(enrolledStudents) ? enrolledStudents : [],
+        currentParticipants: Number.isFinite(currentParticipants) ? currentParticipants : 0,
+        status: lessonData.status || 'active',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const lessonRef = await addDoc(collection(db, 'lessons'), payload);
+
+      return {
+        success: true,
+        lessonId: lessonRef.id,
+        message: 'Ders başarıyla oluşturuldu.'
+      };
+    } catch (error) {
+      console.error('Error creating lesson:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Ders oluşturulurken hata oluştu.'
+      };
+    }
+  },
+
+  // Update a lesson
+  updateLesson: async (lessonId, updatedData) => {
+    try {
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const lessonDoc = await getDoc(lessonRef);
+      
+      if (!lessonDoc.exists()) {
+        return {
+          success: false,
+          message: 'Ders bulunamadı.'
+        };
+      }
+
+      const currentData = lessonDoc.data();
+      
+      // Validate that maxStudents is not less than current enrolled students
+      const enrolledCount = currentData.enrolledStudents?.length || 0;
+      if (updatedData.maxStudents && updatedData.maxStudents < enrolledCount) {
+        return {
+          success: false,
+          message: `Maksimum öğrenci sayısı mevcut kayıtlı öğrenci sayısından (${enrolledCount}) az olamaz.`
+        };
+      }
+      
+      // Update the lesson
+      const fieldsToUpdate = {
+        title: updatedData.title,
+        description: updatedData.description,
+        type: updatedData.type,
+        maxStudents: updatedData.maxStudents,
+        maxParticipants: updatedData.maxParticipants ?? updatedData.maxStudents,
+        duration: updatedData.duration,
+        scheduledDate: updatedData.scheduledDate,
+        startTime: updatedData.startTime,
+        endTime: updatedData.endTime,
+        dayOfWeek: updatedData.dayOfWeek,
+        trainerId: updatedData.trainerId ?? currentData.trainerId,
+        trainerName: updatedData.trainerName ?? currentData.trainerName,
+        status: updatedData.status ?? currentData.status ?? 'active',
+        level: updatedData.level ?? currentData.level,
+        price: updatedData.price ?? currentData.price,
+        updatedBy: updatedData.updatedBy,
+        updatedAt: serverTimestamp(),
+      };
+
+      Object.keys(fieldsToUpdate).forEach((key) => {
+        if (typeof fieldsToUpdate[key] === 'undefined') {
+          delete fieldsToUpdate[key];
+        }
+      });
+
+      await updateDoc(lessonRef, fieldsToUpdate);
+      
+      return {
+        success: true,
+        message: 'Ders başarıyla güncellendi.'
+      };
+    } catch (error) {
+      console.error('Error updating lesson:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Ders güncellenirken hata oluştu.'
+      };
+    }
+  },
+
+  copyLessonToFutureWeeks: async (lessonData, weeksToCopy = 0) => {
+    try {
+      const totalWeeks = parseInt(weeksToCopy, 10);
+
+      if (Number.isNaN(totalWeeks) || totalWeeks < 1) {
+        return {
+          success: false,
+          message: 'Lütfen 1 veya daha büyük bir hafta sayısı girin.',
+        };
+      }
+
+      const baseDate = new Date(lessonData.scheduledDate);
+      if (Number.isNaN(baseDate.getTime())) {
+        return {
+          success: false,
+          message: 'Geçersiz ders tarihi. Lütfen dersi yeniden kaydedin.',
+        };
+      }
+
+      const {
+        participants,
+        enrolledStudents,
+        currentParticipants,
+        createdAt,
+        updatedAt,
+        id,
+        ...rest
+      } = lessonData;
+
+      const sanitizedBase = {
+        ...rest,
+        participants: [],
+        enrolledStudents: [],
+        currentParticipants: 0,
+        status: rest.status || 'active',
+      };
+
+      for (let i = 1; i <= totalWeeks; i += 1) {
+        const duplicateDate = new Date(baseDate);
+        duplicateDate.setDate(duplicateDate.getDate() + i * 7);
+
+        const duplicatePayload = {
+          ...sanitizedBase,
+          scheduledDate: duplicateDate.toISOString(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        await addDoc(collection(db, 'lessons'), duplicatePayload);
+      }
+
+      return {
+        success: true,
+        createdCount: totalWeeks,
+        message: 'Ders diğer haftalara kopyalandı.',
+      };
+    } catch (error) {
+      console.error('Error copying lesson to future weeks:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Ders kopyalanırken hata oluştu.',
+      };
+    }
+  },
+
+  // Get lesson statistics
+  getLessonStats: async () => {
+    try {
+      const q = query(collection(db, 'lessons'));
+      const querySnapshot = await getDocs(q);
+      
+      let total = 0;
+      let upcoming = 0;
+      let completed = 0;
+      let cancelled = 0;
+      const now = new Date();
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        total++;
+        
+        if (data.status === 'cancelled') {
+          cancelled++;
+        } else if (data.status === 'completed') {
+          completed++;
+        } else if (new Date(data.scheduledDate) > now) {
+          upcoming++;
+        }
+      });
+      
+      return {
+        success: true,
+        stats: {
+          total,
+          upcoming,
+          completed,
+          cancelled
+        }
+      };
+    } catch (error) {
+      console.error('Error getting lesson stats:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Ders istatistikleri alınırken hata oluştu.'
+      };
+    }
+  },
+
+  // Get all students (users with role 'user')
+  getAllStudents: async () => {
+    try {
+      const q = query(
+        collection(db, 'users'),
+        where('role', '==', 'customer')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const students = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        students.push({
+          id: doc.id,
+          name: data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+          email: data.email,
+          phone: data.phone,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          ...data
+        });
+      });
+      
+      // Sort by name
+      students.sort((a, b) => a.name.localeCompare(b.name));
+      
+      return {
+        success: true,
+        students
+      };
+    } catch (error) {
+      console.error('Error getting students:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Öğrenciler yüklenirken hata oluştu.'
+      };
+    }
+  },
+
+  // Manually add student to lesson (admin/instructor only)
+  addStudentToLesson: async (lessonId, userId, adminId) => {
+    try {
+      // First, check user's remaining credits
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        return {
+          success: false,
+          message: 'Kullanıcı bulunamadı.'
+        };
+      }
+      
+      const userData = userDoc.data();
+      const remainingCredits = userData.remainingClasses || userData.lessonCredits || 0;
+      
+      if (remainingCredits <= 0) {
+        return {
+          success: false,
+          message: 'Öğrencinin kalan dersi yok. Lütfen paket satın almasını sağlayın.'
+        };
+      }
+      
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const lessonDoc = await getDoc(lessonRef);
+      
+      if (!lessonDoc.exists()) {
+        return {
+          success: false,
+          message: 'Ders bulunamadı.'
+        };
+      }
+      
+      const lessonData = lessonDoc.data();
+      
+      // Check if lesson is in the past
+      const now = new Date();
+      if (lessonData.scheduledDate && lessonData.startTime) {
+        let lessonDate;
+        if (typeof lessonData.scheduledDate === 'string') {
+          lessonDate = new Date(lessonData.scheduledDate);
+        } else if (lessonData.scheduledDate.toDate) {
+          lessonDate = lessonData.scheduledDate.toDate();
+        } else {
+          lessonDate = new Date(lessonData.scheduledDate);
+        }
+        
+        const [hours, minutes] = lessonData.startTime.split(':').map(Number);
+        lessonDate.setHours(hours, minutes, 0, 0);
+        
+        if (lessonDate < now) {
+          return {
+            success: false,
+            message: 'Geçmiş bir derse öğrenci eklenemez. Bu ders zaten gerçekleşti.'
+          };
+        }
+      }
+      
+      const currentParticipants = lessonData.participants ? lessonData.participants.length : 0;
+      
+      // Check if lesson is full
+      if (currentParticipants >= lessonData.maxParticipants) {
+        return {
+          success: false,
+          message: 'Ders dolu. Maksimum katılımcı sayısına ulaşıldı.'
+        };
+      }
+      
+      // Check if user is already registered
+      if (lessonData.participants && lessonData.participants.includes(userId)) {
+        return {
+          success: false,
+          message: 'Öğrenci zaten bu derse kayıtlı.'
+        };
+      }
+      
+      // Deduct one credit from user
+      await updateDoc(userRef, {
+        remainingClasses: remainingCredits - 1,
+        lessonCredits: remainingCredits - 1,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Add user to participants
+      await updateDoc(lessonRef, {
+        participants: arrayUnion(userId),
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+
+      // Create booking history record
+      try {
+        await bookingHistoryService.createBookingHistory(userId, lessonId, {
+          ...lessonData,
+          id: lessonId
+        }, 'admin_added');
+      } catch (historyError) {
+        console.warn('⚠️ Could not create booking history:', historyError);
+      }
+      
+      return {
+        success: true,
+        message: `Öğrenci derse başarıyla eklendi. Kalan ders: ${remainingCredits - 1}`,
+        remainingCredits: remainingCredits - 1
+      };
+    } catch (error) {
+      console.error('Error adding student to lesson:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Öğrenci eklenirken hata oluştu.'
+      };
+    }
+  },
+
+  // Remove student from lesson (admin/instructor only)
+  removeStudentFromLesson: async (lessonId, userId, adminId) => {
+    try {
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const lessonDoc = await getDoc(lessonRef);
+      
+      if (!lessonDoc.exists()) {
+        return {
+          success: false,
+          message: 'Ders bulunamadı.'
+        };
+      }
+      
+      const lessonData = lessonDoc.data();
+      
+      // Check if lesson is in the past
+      const now = new Date();
+      if (lessonData.scheduledDate && lessonData.startTime) {
+        let lessonDate;
+        if (typeof lessonData.scheduledDate === 'string') {
+          lessonDate = new Date(lessonData.scheduledDate);
+        } else if (lessonData.scheduledDate.toDate) {
+          lessonDate = lessonData.scheduledDate.toDate();
+        } else {
+          lessonDate = new Date(lessonData.scheduledDate);
+        }
+        
+        const [hours, minutes] = lessonData.startTime.split(':').map(Number);
+        lessonDate.setHours(hours, minutes, 0, 0);
+        
+        if (lessonDate < now) {
+          return {
+            success: false,
+            message: 'Geçmiş bir dersten öğrenci çıkarılamaz. Bu ders zaten gerçekleşti.'
+          };
+        }
+      }
+      
+      // Check if user is registered
+      if (!lessonData.participants || !lessonData.participants.includes(userId)) {
+        return {
+          success: false,
+          message: 'Öğrenci bu derse kayıtlı değil.'
+        };
+      }
+      
+      // Refund credit to user
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const currentCredits = userData.remainingClasses || userData.lessonCredits || 0;
+        
+        await updateDoc(userRef, {
+          remainingClasses: currentCredits + 1,
+          lessonCredits: currentCredits + 1,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      // Remove user from participants
+      await updateDoc(lessonRef, {
+        participants: arrayRemove(userId),
+        updatedAt: serverTimestamp(),
+        updatedBy: adminId
+      });
+
+      // Update booking history
+      try {
+        await bookingHistoryService.createBookingHistory(userId, lessonId, {
+          ...lessonData,
+          id: lessonId
+        }, 'admin_removed');
+      } catch (historyError) {
+        console.warn('⚠️ Could not create booking history:', historyError);
+      }
+      
+      return {
+        success: true,
+        message: 'Öğrenci dersten başarıyla çıkarıldı. Ders kredisi iade edildi.'
+      };
+    } catch (error) {
+      console.error('Error removing student from lesson:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Öğrenci çıkarılırken hata oluştu.'
+      };
+    }
+  }
+};
+
+// Export both services
+export { lessonService as default, adminLessonService };

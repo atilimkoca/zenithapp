@@ -22,6 +22,14 @@ import UniqueHeader from '../components/UniqueHeader';
 
 const { width } = Dimensions.get('window');
 
+// Helper function to safely translate lesson descriptions
+const translateLessonDescription = (t, description) => {
+  if (!description) return '';
+  const translationKey = `lessonDescriptions.${description}`;
+  const translated = t(translationKey);
+  return translated === translationKey ? description : translated;
+};
+
 export default function ClassSelectionScreen() {
   const { user } = useAuth();
   const { t, language: currentLanguage } = useI18n();
@@ -242,10 +250,16 @@ export default function ClassSelectionScreen() {
           onPress: async () => {
             const result = await lessonService.bookLesson(lesson.id, user.uid);
             if (result.success) {
-              Alert.alert(t('classSelection.bookingSuccess') || 'Başarılı! 🎉', result.message);
+              Alert.alert(
+                t('classSelection.bookingSuccess') || 'Başarılı! 🎉', 
+                result.messageKey ? t(result.messageKey) : result.message
+              );
               loadLessons(); // Refresh the lessons
             } else {
-              Alert.alert(t('general.error') || 'Hata', result.message);
+              Alert.alert(
+                t('general.error') || 'Hata', 
+                result.messageKey ? t(result.messageKey) : result.message
+              );
             }
           }
         }
@@ -488,20 +502,6 @@ export default function ClassSelectionScreen() {
                                 </View>
                                 <View style={styles.classNameContainer}>
                                   <Text style={styles.className}>{lesson.title}</Text>
-                                  <Text style={styles.trainingType}>
-                                    {(() => {
-                                      const description = lesson.lessonTypeInfo?.description || lesson.trainingType;
-                                      const translation = t(`classSelection.${description}`);
-                                      
-                                      // If translation returns the key itself, it means translation doesn't exist
-                                      if (translation && translation !== `classSelection.${description}`) {
-                                        return translation;
-                                      }
-                                      
-                                      // Fallback to original description
-                                      return description;
-                                    })()}
-                                  </Text>
                                 </View>
                               </View>
                               
@@ -572,25 +572,6 @@ export default function ClassSelectionScreen() {
                                     />
                                   </View>
                                 </View>
-                              </View>
-                            </View>
-
-                            {/* Equipment & Benefits */}
-                            <View style={styles.extraInfo}>
-                              <View style={styles.infoChip}>
-                                <Ionicons name="fitness-outline" size={12} color={colors.textSecondary} />
-                                <Text style={styles.infoChipText}>
-                                  {t(`classSelection.equipment.${lesson.equipment}`) || lesson.equipment}
-                                </Text>
-                              </View>
-                              <View style={styles.benefitsContainer}>
-                                {lesson.benefits.slice(0, 2).map((benefit, idx) => (
-                                  <View key={idx} style={styles.benefitChip}>
-                                    <Text style={styles.benefitText}>
-                                      {t(`classSelection.benefits.${benefit}`) || benefit}
-                                    </Text>
-                                  </View>
-                                ))}
                               </View>
                             </View>
                           </View>
@@ -679,20 +660,76 @@ export default function ClassSelectionScreen() {
 
           {/* Enhanced Info Card */}
           <View style={styles.section}>
-            <LinearGradient
-              colors={[colors.primary + '05', colors.primary + '02']}
-              style={styles.infoCard}
-            >
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoTitle}>{t('classSelection.infoTitle') || 'Rezervasyon Rehberi'}</Text>
-                <Text style={styles.infoText}>
-                  {t('classSelection.infoText') || '• Dersler başlamadan 2 saat öncesine kadar iptal edilebilir\n• İlk kez katılacaksanız 15 dakika önceden gelin\n• Gerekli ekipmanlar derste sağlanır\n• Rahat kıyafet giymeyi unutmayın'}
-                </Text>
-              </View>
-            </LinearGradient>
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle" size={24} color={colors.primary} />
+              <Text style={styles.infoHeaderTitle}>{t('classSelection.infoTitle') || 'Booking Guide'}</Text>
+            </View>
+            
+            <View style={styles.infoCardsContainer}>
+              {/* Cancel Policy Card */}
+              <LinearGradient
+                colors={[colors.warning + '12', colors.warning + '08']}
+                style={styles.infoItemCard}
+              >
+                <View style={styles.infoItemIconContainer}>
+                  <Ionicons name="time-outline" size={22} color={colors.warning} />
+                </View>
+                <View style={styles.infoItemContent}>
+                  <Text style={styles.infoItemTitle}>{t('classSelection.infoBulletTitle1') || 'Cancellation Policy'}</Text>
+                  <Text style={styles.infoItemText}>
+                    {t('classSelection.infoBullet1') || 'Lessons can be cancelled up to 2 hours before start time'}
+                  </Text>
+                </View>
+              </LinearGradient>
+
+              {/* Arrival Time Card */}
+              <LinearGradient
+                colors={[colors.primary + '12', colors.primary + '08']}
+                style={styles.infoItemCard}
+              >
+                <View style={styles.infoItemIconContainer}>
+                  <Ionicons name="alarm-outline" size={22} color={colors.primary} />
+                </View>
+                <View style={styles.infoItemContent}>
+                  <Text style={styles.infoItemTitle}>{t('classSelection.infoBulletTitle2') || 'First Visit'}</Text>
+                  <Text style={styles.infoItemText}>
+                    {t('classSelection.infoBullet2') || 'First-time participants should arrive 15 minutes early'}
+                  </Text>
+                </View>
+              </LinearGradient>
+
+              {/* Equipment Card */}
+              <LinearGradient
+                colors={[colors.success + '12', colors.success + '08']}
+                style={styles.infoItemCard}
+              >
+                <View style={styles.infoItemIconContainer}>
+                  <Ionicons name="fitness-outline" size={22} color={colors.success} />
+                </View>
+                <View style={styles.infoItemContent}>
+                  <Text style={styles.infoItemTitle}>{t('classSelection.infoBulletTitle3') || 'Equipment'}</Text>
+                  <Text style={styles.infoItemText}>
+                    {t('classSelection.infoBullet3') || 'All required equipment is provided in class'}
+                  </Text>
+                </View>
+              </LinearGradient>
+
+              {/* Clothing Card */}
+              <LinearGradient
+                colors={[colors.secondary + '12', colors.secondary + '08']}
+                style={styles.infoItemCard}
+              >
+                <View style={styles.infoItemIconContainer}>
+                  <Ionicons name="shirt-outline" size={22} color={colors.secondary} />
+                </View>
+                <View style={styles.infoItemContent}>
+                  <Text style={styles.infoItemTitle}>{t('classSelection.infoBulletTitle4') || 'Dress Code'}</Text>
+                  <Text style={styles.infoItemText}>
+                    {t('classSelection.infoBullet4') || 'Remember to wear comfortable clothing'}
+                  </Text>
+                </View>
+              </LinearGradient>
+            </View>
           </View>
 
           {/* Bottom spacing for navigation */}
@@ -1193,39 +1230,65 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Enhanced Info Card
-  infoCard: {
-    borderRadius: 20,
-    padding: 20,
+  // Enhanced Info Section
+  infoHeader: {
     flexDirection: 'row',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  infoIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary + '15',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
+  infoHeaderTitle: {
+    fontSize: 20,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 8,
+    marginLeft: 12,
+    letterSpacing: -0.3,
   },
-  infoText: {
-    fontSize: 14,
+  infoCardsContainer: {
+    gap: 12,
+  },
+  infoItemCard: {
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.white,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 12,
+  },
+  infoItemIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  infoItemContent: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  infoItemTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  infoItemText: {
+    fontSize: 13,
     color: colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: 19,
     fontWeight: '500',
   },
 });

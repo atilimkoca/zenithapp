@@ -61,7 +61,7 @@ export const registerUser = async (email, password, userData) => {
         isActive: false,
         role: 'customer'
       },
-      message: 'Hesabınız başarıyla oluşturuldu! Giriş yapabilmek için onay beklemeniz gerekmektedir.'
+      messageKey: 'auth.accountCreatedSuccess' // Translation key instead of hardcoded message
     };
   } catch (error) {
     console.error('Registration error:', error);
@@ -105,22 +105,24 @@ export const loginUser = async (email, password) => {
       await signOut(auth); // Sign them out immediately
       return {
         success: false,
-        message: 'Bu hesap artık mevcut değil. Lütfen yeniden kayıt olun.'
+        messageKey: 'auth.accountDeletedMessage' // Translation key
       };
     }
     
     const userData = userDoc.data();
 
-    // Check if user is approved
-    if (userData && userData.status !== 'approved') {
+    // Check if user is approved (skip check for admins and instructors)
+    const isAdminOrInstructor = userData && (userData.role === 'admin' || userData.role === 'instructor');
+    
+    if (userData && !isAdminOrInstructor && userData.status !== 'approved') {
       // Don't sign out the user, just return status info
       // This allows them to stay logged in and see the pending screen
       
-      let statusMessage = 'Hesabınız henüz onaylanmamış.';
+      let messageKey = 'auth.accountPendingMessage'; // Default
       if (userData.status === 'pending') {
-        statusMessage = 'Hesabınız admin onayı bekliyor. Onaylandıktan sonra tam erişim sağlayabileceksiniz.';
+        messageKey = 'auth.accountPendingMessage';
       } else if (userData.status === 'rejected') {
-        statusMessage = 'Hesabınız reddedilmiş. Daha fazla bilgi için lütfen bizimle iletişime geçin.';
+        messageKey = 'auth.accountRejectedMessage';
       }
       
       return {
@@ -128,7 +130,7 @@ export const loginUser = async (email, password) => {
         user: user,
         userData: userData,
         requiresApproval: true, // Flag to indicate pending status
-        message: statusMessage
+        messageKey: messageKey // Translation key instead of hardcoded message
       };
     }
 

@@ -333,14 +333,14 @@ export const userLessonService = {
       
       return {
         success: true,
-        message: 'Ders rezervasyonunuz başarıyla iptal edildi ve ders krediniz iade edildi.'
+        messageKey: 'classes.cancelSuccessMessage'
       };
     } catch (error) {
       console.error('Error cancelling lesson booking:', error);
       return {
         success: false,
         error: error.code,
-        message: 'Rezervasyon iptal edilirken hata oluştu.'
+        messageKey: 'classes.cancelErrorMessage'
       };
     }
   },

@@ -16,8 +16,10 @@ import { CustomInput, CustomButton } from '../components/UI';
 import { colors } from '../constants/colors';
 import { registerUser } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../context/I18nContext';
 
 export default function RegisterScreen({ navigation }) {
+  const { t } = useI18n();
   const { setUserData, setApprovalStatus } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
@@ -43,39 +45,39 @@ export default function RegisterScreen({ navigation }) {
     const newErrors = {};
     
     if (!formData.firstName.trim()) {
-      newErrors.firstName = 'Ad gerekli';
+      newErrors.firstName = t('auth.firstNameRequired');
     }
     
     if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Soyad gerekli';
+      newErrors.lastName = t('auth.lastNameRequired');
     }
     
     if (!formData.email) {
-      newErrors.email = 'E-posta adresi gerekli';
+      newErrors.email = t('auth.emailRequired');
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Geçerli bir e-posta adresi girin';
+      newErrors.email = t('auth.invalidEmail');
     }
     
     if (!formData.phone) {
-      newErrors.phone = 'Telefon numarası gerekli';
+      newErrors.phone = t('auth.phoneRequired');
     } else if (!/^[0-9+\-\s()]+$/.test(formData.phone)) {
-      newErrors.phone = 'Geçerli bir telefon numarası girin';
+      newErrors.phone = t('auth.invalidPhone');
     }
     
     if (!formData.password) {
-      newErrors.password = 'Şifre gerekli';
+      newErrors.password = t('auth.passwordRequired');
     } else if (formData.password.length < 6) {
-      newErrors.password = 'Şifre en az 6 karakter olmalı';
+      newErrors.password = t('auth.passwordMinLength');
     }
     
     if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Şifre tekrarı gerekli';
+      newErrors.confirmPassword = t('auth.confirmPasswordRequired');
     } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Şifreler eşleşmiyor';
+      newErrors.confirmPassword = t('auth.passwordsNotMatch');
     }
     
     if (!agreeToTerms) {
-      newErrors.terms = 'Kullanım koşullarını kabul etmelisiniz';
+      newErrors.terms = t('auth.termsRequired');
     }
     
     setErrors(newErrors);
@@ -106,20 +108,20 @@ export default function RegisterScreen({ navigation }) {
         }
         
         Alert.alert(
-          'Başarılı', 
-          result.message,
+          t('success'), 
+          result.messageKey ? t(result.messageKey) : result.message,
           [
             {
-              text: 'Tamam'
+              text: t('confirm')
               // App will automatically navigate to pending approval screen
             }
           ]
         );
       } else {
-        Alert.alert('Hata', result.message);
+        Alert.alert(t('error'), result.messageKey ? t(result.messageKey) : result.message);
       }
     } catch (error) {
-      Alert.alert('Hata', 'Beklenmeyen bir hata oluştu.');
+      Alert.alert(t('error'), t('general.unexpectedError') || 'Beklenmeyen bir hata oluştu.');
     } finally {
       setLoading(false);
     }
@@ -156,9 +158,9 @@ export default function RegisterScreen({ navigation }) {
                 />
               </View>
               
-              <Text style={styles.title}>Hesap Oluşturun</Text>
+              <Text style={styles.title}>{t('auth.createAccount')}</Text>
               <Text style={styles.subtitle}>
-                Zénith Pilates & Yoga Studio'ya katılın
+                {t('auth.registerSubtitle')}
               </Text>
             </View>
 
@@ -168,56 +170,56 @@ export default function RegisterScreen({ navigation }) {
                 <View style={styles.nameRow}>
                   <View style={styles.nameInput}>
                     <CustomInput
-                      label="Ad"
+                      label={t('auth.firstName')}
                       value={formData.firstName}
                       onChangeText={(value) => updateFormData('firstName', value)}
-                      placeholder="Adınız"
+                      placeholder={t('auth.firstNamePlaceholder')}
                       error={errors.firstName}
                     />
                   </View>
                   <View style={styles.nameInput}>
                     <CustomInput
-                      label="Soyad"
+                      label={t('auth.lastName')}
                       value={formData.lastName}
                       onChangeText={(value) => updateFormData('lastName', value)}
-                      placeholder="Soyadınız"
+                      placeholder={t('auth.lastNamePlaceholder')}
                       error={errors.lastName}
                     />
                   </View>
                 </View>
                 
                 <CustomInput
-                  label="E-posta"
+                  label={t('auth.email')}
                   value={formData.email}
                   onChangeText={(value) => updateFormData('email', value)}
-                  placeholder="ornek@email.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   keyboardType="email-address"
                   error={errors.email}
                 />
                 
                 <CustomInput
-                  label="Telefon"
+                  label={t('auth.phone')}
                   value={formData.phone}
                   onChangeText={(value) => updateFormData('phone', value)}
-                  placeholder="+90 555 123 45 67"
+                  placeholder={t('auth.phonePlaceholder')}
                   keyboardType="phone-pad"
                   error={errors.phone}
                 />
                 
                 <CustomInput
-                  label="Şifre"
+                  label={t('auth.password')}
                   value={formData.password}
                   onChangeText={(value) => updateFormData('password', value)}
-                  placeholder="Şifrenizi oluşturun"
+                  placeholder={t('auth.createPasswordPlaceholder')}
                   secureTextEntry
                   error={errors.password}
                 />
                 
                 <CustomInput
-                  label="Şifre Tekrarı"
+                  label={t('auth.confirmPassword')}
                   value={formData.confirmPassword}
                   onChangeText={(value) => updateFormData('confirmPassword', value)}
-                  placeholder="Şifrenizi tekrar girin"
+                  placeholder={t('auth.confirmPasswordPlaceholder')}
                   secureTextEntry
                   error={errors.confirmPassword}
                 />
@@ -231,14 +233,19 @@ export default function RegisterScreen({ navigation }) {
                     {agreeToTerms && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={styles.termsText}>
-                    <Text style={styles.termsLink}>Kullanım Koşulları</Text> ve{' '}
-                    <Text style={styles.termsLink}>Gizlilik Politikası</Text>'nı kabul ediyorum
+                    {t('auth.termsAndPrivacyText') !== 'auth.termsAndPrivacyText' ? 
+                      t('auth.termsAndPrivacyText') :
+                      <>
+                        <Text style={styles.termsLink}>{t('auth.termsOfService')}</Text>{t('auth.and')}
+                        <Text style={styles.termsLink}>{t('auth.privacyPolicy')}</Text>{t('auth.agreeText') || "'nı kabul ediyorum"}
+                      </>
+                    }
                   </Text>
                 </TouchableOpacity>
                 {errors.terms && <Text style={styles.errorText}>{errors.terms}</Text>}
                 
                 <CustomButton
-                  title={loading ? "Hesap Oluşturuluyor..." : "Hesap Oluştur"}
+                  title={loading ? t('auth.creatingAccount') : t('auth.createAccountButton')}
                   onPress={handleRegister}
                   disabled={loading}
                   style={styles.registerButton}
@@ -250,10 +257,10 @@ export default function RegisterScreen({ navigation }) {
             <View style={styles.loginSection}>
               <View style={styles.loginTextContainer}>
                 <Text style={styles.loginText}>
-                  Zaten hesabınız var mı?{' '}
+                  {t('auth.alreadyHaveAccount')}
                 </Text>
                 <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                  <Text style={styles.loginLink}>Giriş Yapın</Text>
+                  <Text style={styles.loginLink}>{t('auth.loginLinkText')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

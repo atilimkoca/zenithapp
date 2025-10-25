@@ -2,17 +2,27 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import PendingApprovalScreen from './src/screens/PendingApprovalScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
-import AdminPanelScreen from './src/screens/AdminPanelScreen';
+import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
+import AdminUserManagementScreen from './src/screens/admin/AdminUserManagementScreen';
+import AdminLessonManagementScreen from './src/screens/admin/AdminLessonManagementScreen';
+import AdminCreateLessonScreen from './src/screens/admin/AdminCreateLessonScreen';
+import AdminEditLessonScreen from './src/screens/admin/AdminEditLessonScreen';
+import AdminAddStudentToLessonScreen from './src/screens/admin/AdminAddStudentToLessonScreen';
+import AdminTrainerManagementScreen from './src/screens/admin/AdminTrainerManagementScreen';
+import AdminNotificationsScreen from './src/screens/admin/AdminNotificationsScreen';
+import AdminSettingsScreen from './src/screens/admin/AdminSettingsScreen';
+import AdminFinanceReportsScreen from './src/screens/admin/AdminFinanceReportsScreen';
 import MainTabNavigator from './src/navigation/MainTabNavigator';
+import AdminTabNavigator from './src/navigation/AdminTabNavigator';
 import { colors } from './src/constants/colors';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
-import { I18nProvider } from './src/context/I18nContext';
+import { I18nProvider, useI18n } from './src/context/I18nContext';
 import { simplePushNotificationService } from './src/services/simplePushNotificationService';
 import { setupNotificationListeners } from './src/services/pushNotificationService';
 import { setupSimpleFirebaseListener } from './src/services/simpleFirebaseListener';
@@ -22,7 +32,8 @@ const Stack = createStackNavigator();
 
 // Main Navigation Component
 function Navigation() {
-  const { isAuthenticated, isApproved, isPending, isRejected, initializing, user } = useAuth();
+  const { isAuthenticated, isApproved, isPending, isRejected, isAdmin, initializing, user } = useAuth();
+  const { isLoading } = useI18n();
 
   // Setup push notifications when user is authenticated
   useEffect(() => {
@@ -36,10 +47,11 @@ function Navigation() {
           const fcmInitialized = await FCMService.initialize(user.uid);
           
           if (fcmInitialized) {
-            // Test FCM notification
-            setTimeout(() => {
-              FCMService.sendTestNotification();
-            }, 2000);
+            // Test FCM notification - DISABLED to prevent confusion
+            // setTimeout(() => {
+            //   FCMService.sendTestNotification();
+            // }, 2000);
+            console.log('✅ FCM initialized successfully');
           }
 
           // Also register for push notifications using simple service (Expo Go compatible)
@@ -70,8 +82,8 @@ function Navigation() {
     };
   }, [isAuthenticated, user?.uid, isApproved]);
 
-  // Show loading screen while checking authentication state
-  if (initializing) {
+  // Show loading screen while I18n is loading or while checking authentication state
+  if (isLoading || initializing) {
     return (
       <View style={{ 
         flex: 1, 
@@ -80,6 +92,9 @@ function Navigation() {
         backgroundColor: colors.background 
       }}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 10, color: colors.text }}>
+          {isLoading ? 'Loading translations...' : 'Loading...'}
+        </Text>
       </View>
     );
   }
@@ -115,8 +130,76 @@ function Navigation() {
           name="PendingApproval" 
           component={PendingApprovalScreen} 
         />
+      ) : isAdmin ? (
+        // Admin interface for admin/instructor users
+        <>
+          <Stack.Screen 
+            name="AdminTabs" 
+            component={AdminTabNavigator}
+          />
+          <Stack.Screen 
+            name="CreateLesson" 
+            component={AdminCreateLessonScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="EditLesson" 
+            component={AdminEditLessonScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="AddStudentToLesson" 
+            component={AdminAddStudentToLessonScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="AdminTrainerManagement" 
+            component={AdminTrainerManagementScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="AdminSettings" 
+            component={AdminSettingsScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="AdminFinanceReports" 
+            component={AdminFinanceReportsScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen 
+            name="Notifications" 
+            component={NotificationScreen}
+            options={{
+              presentation: 'modal',
+              animationTypeForReplace: 'push',
+              cardStyle: { backgroundColor: 'transparent' },
+              cardOverlayEnabled: true,
+              cardStyleInterpolator: ({ current: { progress } }) => ({
+                cardStyle: {
+                  opacity: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 1],
+                  }),
+                },
+              }),
+            }}
+          />
+        </>
       ) : (
-        // Main app screens for approved users
+        // Main app screens for approved regular users
         <>
           <Stack.Screen 
             name="MainTabs" 
@@ -128,14 +211,16 @@ function Navigation() {
             options={{
               presentation: 'modal',
               animationTypeForReplace: 'push',
-            }}
-          />
-          <Stack.Screen 
-            name="AdminPanel" 
-            component={AdminPanelScreen}
-            options={{
-              presentation: 'modal',
-              animationTypeForReplace: 'push',
+              cardStyle: { backgroundColor: 'transparent' },
+              cardOverlayEnabled: true,
+              cardStyleInterpolator: ({ current: { progress } }) => ({
+                cardStyle: {
+                  opacity: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 1],
+                  }),
+                },
+              }),
             }}
           />
         </>

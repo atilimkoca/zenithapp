@@ -14,14 +14,18 @@ class FCMService {
   async initialize(userId) {
     try {
 
-      // Configure notification handler
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
+      // Configure notification handler ONCE (check global flag to prevent duplicates)
+      if (!global.__zenith_notification_handler_set) {
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          }),
+        });
+        global.__zenith_notification_handler_set = true;
+        console.log('✅ Notification handler configured (once)');
+      }
 
       // Request permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();

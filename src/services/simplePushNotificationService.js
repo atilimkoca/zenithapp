@@ -107,11 +107,5 @@ export const simplePushNotificationService = {
   }
 };
 
-// Configure notification behavior for simple service
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Note: Notification handler is set in fcmService.js to avoid duplicates
+// Do NOT set it here - multiple handlers cause duplicate notifications

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
@@ -12,12 +11,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors } from '../constants/colors';
 import { userLessonService } from '../services/userLessonService';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import UniqueHeader from '../components/UniqueHeader';
 import { translateLessonsArray } from '../utils/lessonTranslation';
+import { formatLocalizedDate } from '../utils/dateUtils';
 
 // Helper function to safely translate lesson types
 const translateLessonType = (t, lessonTitle) => {
@@ -35,9 +36,87 @@ const translateLessonDescription = (t, description) => {
   return translated === translationKey ? description : translated;
 };
 
+// Helper function to translate cancel reasons
+const translateCancelReason = (t, reason) => {
+  if (!reason) return '';
+  // Check for common cancel reasons and translate them
+  if (reason === 'Kullanıcı tarafından iptal edildi' || reason.includes('iptal edildi')) {
+    return t('classes.cancelledByUser');
+  }
+  if (reason === 'Ders iptal edildi' || reason.includes('Ders iptal')) {
+    return t('classes.lessonCancelled');
+  }
+  return reason; // Return original if no translation found
+};
+
+// Helper function to calculate this week's lesson count
+const calculateThisWeekCount = (lessons) => {
+  if (!lessons || !Array.isArray(lessons)) return 0;
+  
+  return lessons.filter(lesson => {
+    if (!lesson.scheduledDate || lesson.userStatus === 'cancelled') return false;
+    
+    try {
+      let lessonDate;
+      if (lesson.scheduledDate.includes('T')) {
+        lessonDate = new Date(lesson.scheduledDate.split('T')[0]);
+      } else {
+        lessonDate = new Date(lesson.scheduledDate);
+      }
+      
+      const today = new Date();
+      const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - daysFromMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      return lessonDate >= weekStart && lessonDate <= weekEnd;
+    } catch (error) {
+      console.warn('Error in week calculation:', error);
+      return false;
+    }
+  }).length;
+};
+
+// Helper function to calculate this month's lesson count
+const calculateThisMonthCount = (lessons) => {
+  if (!lessons || !Array.isArray(lessons)) return 0;
+  
+  return lessons.filter(lesson => {
+    if (!lesson.scheduledDate || lesson.userStatus === 'cancelled') return false;
+    
+    try {
+      let lessonDate;
+      if (lesson.scheduledDate.includes('T')) {
+        lessonDate = new Date(lesson.scheduledDate.split('T')[0]);
+      } else {
+        lessonDate = new Date(lesson.scheduledDate);
+      }
+      
+      const today = new Date();
+      return lessonDate.getMonth() === today.getMonth() && 
+             lessonDate.getFullYear() === today.getFullYear();
+    } catch (error) {
+      console.warn('Error in month calculation:', error);
+      return false;
+    }
+  }).length;
+};
+
+// Helper function to calculate completion rate
+const calculateCompletionRate = (completedCount, upcomingCount) => {
+  const activeLessons = completedCount + upcomingCount;
+  return activeLessons > 0 ? Math.round((completedCount / activeLessons) * 100) : 0;
+};
+
 export default function ClassHistoryScreen() {
   const { user } = useAuth();
-  const { t, locale } = useI18n();
+  const { t, locale, language: currentLanguage } = useI18n();
   const [selectedTab, setSelectedTab] = useState('upcoming'); // upcoming, completed, cancelled
   const [lessons, setLessons] = useState({
     all: [],
@@ -64,12 +143,21 @@ export default function ClassHistoryScreen() {
     }
   }, [user]);
 
-  // Reload lessons when locale changes to retranslate content
+  // Reload lessons when locale or language changes to retranslate content and reformat dates
   useEffect(() => {
     if (user && lessons.all.length > 0) {
       loadUserLessons();
     }
-  }, [locale]);
+  }, [locale, currentLanguage]);
+
+  // Reload lessons when screen comes into focus (e.g., after booking a lesson)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadUserLessons();
+      }
+    }, [user])
+  );
 
   const loadUserLessons = async () => {
     try {
@@ -91,6 +179,7 @@ export default function ClassHistoryScreen() {
             type: lesson.type ? translateLessonType(t, lesson.type) : lesson.type,
             trainingType: lesson.trainingType ? translateLessonType(t, lesson.trainingType) : lesson.trainingType,
             description: translateLessonDescription(t, lesson.description),
+            formattedDate: formatLocalizedDate(lesson.scheduledDate, currentLanguage, t),
           })) || [],
           completed: lessonsResult.lessons.completed?.map(lesson => ({
             ...lesson,
@@ -98,6 +187,7 @@ export default function ClassHistoryScreen() {
             type: lesson.type ? translateLessonType(t, lesson.type) : lesson.type,
             trainingType: lesson.trainingType ? translateLessonType(t, lesson.trainingType) : lesson.trainingType,
             description: translateLessonDescription(t, lesson.description),
+            formattedDate: formatLocalizedDate(lesson.scheduledDate, currentLanguage, t),
           })) || [],
           upcoming: lessonsResult.lessons.upcoming?.map(lesson => ({
             ...lesson,
@@ -105,6 +195,7 @@ export default function ClassHistoryScreen() {
             type: lesson.type ? translateLessonType(t, lesson.type) : lesson.type,
             trainingType: lesson.trainingType ? translateLessonType(t, lesson.trainingType) : lesson.trainingType,
             description: translateLessonDescription(t, lesson.description),
+            formattedDate: formatLocalizedDate(lesson.scheduledDate, currentLanguage, t),
           })) || [],
           cancelled: lessonsResult.lessons.cancelled?.map(lesson => ({
             ...lesson,
@@ -112,20 +203,80 @@ export default function ClassHistoryScreen() {
             type: lesson.type ? translateLessonType(t, lesson.type) : lesson.type,
             trainingType: lesson.trainingType ? translateLessonType(t, lesson.trainingType) : lesson.trainingType,
             description: translateLessonDescription(t, lesson.description),
+            formattedDate: formatLocalizedDate(lesson.scheduledDate, currentLanguage, t),
           })) || [],
         };
         
         setLessons(translatedLessons);
+        
+        // Calculate fallback stats from lessons data
+        const fallbackStats = {
+          totalLessons: translatedLessons.all?.length || 0,
+          completedCount: translatedLessons.completed?.length || 0,
+          upcomingCount: translatedLessons.upcoming?.length || 0,
+          cancelledCount: translatedLessons.cancelled?.length || 0,
+          thisWeekCount: calculateThisWeekCount(translatedLessons.all || []),
+          thisMonthCount: calculateThisMonthCount(translatedLessons.all || []),
+          favoriteType: null,
+          completionRate: calculateCompletionRate(translatedLessons.completed?.length || 0, translatedLessons.upcoming?.length || 0)
+        };
+        
+        // Use stats service result if available, otherwise use fallback
+        if (statsResult.success && statsResult.stats) {
+          setStats({
+            ...fallbackStats,
+            ...statsResult.stats,
+            // Ensure critical values are not undefined/null
+            totalLessons: statsResult.stats.totalLessons ?? fallbackStats.totalLessons,
+            completedCount: statsResult.stats.completedCount ?? fallbackStats.completedCount,
+            upcomingCount: statsResult.stats.upcomingCount ?? fallbackStats.upcomingCount,
+            cancelledCount: statsResult.stats.cancelledCount ?? fallbackStats.cancelledCount,
+            thisWeekCount: statsResult.stats.thisWeekCount ?? fallbackStats.thisWeekCount,
+            thisMonthCount: statsResult.stats.thisMonthCount ?? fallbackStats.thisMonthCount,
+            completionRate: statsResult.stats.completionRate ?? fallbackStats.completionRate,
+          });
+        } else {
+          // Use fallback stats if service failed
+          console.warn('Stats service failed, using fallback calculation:', statsResult.message);
+          setStats(fallbackStats);
+        }
       } else {
         Alert.alert(t('error') || 'Error', lessonsResult.message || 'An error occurred while loading lessons.');
-      }
-      
-      if (statsResult.success) {
-        setStats(statsResult.stats);
+        // Set empty stats if lessons failed to load
+        setStats({
+          totalLessons: 0,
+          completedCount: 0,
+          upcomingCount: 0,
+          cancelledCount: 0,
+          thisWeekCount: 0,
+          thisMonthCount: 0,
+          favoriteType: null,
+          completionRate: 0
+        });
       }
     } catch (error) {
       console.error('Error loading user lessons:', error);
       Alert.alert('Hata', 'Dersleriniz yüklenirken bir hata oluştu.');
+      
+      // Set empty stats on error to prevent undefined values
+      setStats({
+        totalLessons: 0,
+        completedCount: 0,
+        upcomingCount: 0,
+        cancelledCount: 0,
+        thisWeekCount: 0,
+        thisMonthCount: 0,
+        favoriteType: null,
+        completionRate: 0
+      });
+      
+      // Set empty lessons on error
+      setLessons({
+        all: [],
+        completed: [],
+        upcoming: [],
+        cancelled: []
+      });
     } finally {
       setLoading(false);
     }
@@ -138,9 +289,9 @@ export default function ClassHistoryScreen() {
   };
 
   const tabs = [
-    { id: 'upcoming', name: t('classes.upcoming'), count: stats.upcomingCount },
-    { id: 'completed', name: t('classes.completed'), count: stats.completedCount },
-    { id: 'cancelled', name: t('classes.cancelled'), count: stats.cancelledCount },
+    { id: 'upcoming', name: t('classes.upcoming'), count: stats.upcomingCount ?? 0 },
+    { id: 'completed', name: t('classes.completed'), count: stats.completedCount ?? 0 },
+    { id: 'cancelled', name: t('classes.cancelled'), count: stats.cancelledCount ?? 0 },
   ];
 
   const getCurrentClasses = () => {
@@ -169,7 +320,7 @@ export default function ClassHistoryScreen() {
       const timeDiff = lessonDateTime.getTime() - now.getTime();
       const hoursUntilLesson = timeDiff / (1000 * 60 * 60);
       
-      if (hoursUntilLesson < 2) {
+      if (hoursUntilLesson < 10) {
         timeCheckMessage = `\n⚠️ ${t('classes.cancelNote')} (${Math.max(0, hoursUntilLesson).toFixed(1)} ${t('time.hoursLeft')})`;
       }
     } catch (error) {
@@ -180,17 +331,19 @@ export default function ClassHistoryScreen() {
       t('classes.cancelLessonTitle'),
       `${lesson.title} ${t('classes.cancelConfirm')}\n\n${t('time.date')}: ${lesson.formattedDate}\n${t('time.time')}: ${lesson.formattedTime}${timeCheckMessage}\n\n❗ ${t('classes.cancelWarning')}`,
       [
-        { text: t('cancel'), style: 'cancel' },
+        { text: t('keepLesson') || 'Keep Lesson', style: 'cancel' },
         { 
-          text: t('classes.cancel'), 
+          text: t('classes.confirmCancel') || 'Cancel Lesson', 
           style: 'destructive',
           onPress: async () => {
             const result = await userLessonService.cancelLessonBooking(lesson.id, user.uid);
             if (result.success) {
-              Alert.alert(t('success') + '! ✅', result.message);
+              const message = result.messageKey ? t(result.messageKey) : result.message;
+              Alert.alert(t('success') + '! ✅', message);
               loadUserLessons(); // Refresh the lessons
             } else {
-              Alert.alert(t('error'), result.message);
+              const message = result.messageKey ? t(result.messageKey) : result.message;
+              Alert.alert(t('error'), message);
             }
           }
         }
@@ -254,7 +407,7 @@ export default function ClassHistoryScreen() {
       const hoursUntilLesson = timeDiff / (1000 * 60 * 60);
       
       
-      return hoursUntilLesson >= 2; // Can cancel if more than 2 hours away
+      return hoursUntilLesson >= 10; // Can cancel if more than 10 hours away
     } catch (error) {
       console.warn('Error checking cancel eligibility:', error);
       return true; // Allow cancellation if we can't check time properly
@@ -263,22 +416,21 @@ export default function ClassHistoryScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>{t('loading')}</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <UniqueHeader
         title={t('classes.title')} 
         subtitle={t('classes.subtitle')}
-        rightIcon="refresh-outline"
-        onRightPress={onRefresh}
+        showNotification={false}
       />
       <ScrollView 
         style={styles.content}
@@ -291,31 +443,39 @@ export default function ClassHistoryScreen() {
           {/* Enhanced Stats Overview */}
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.upcomingCount}</Text>
+              <Text style={styles.statNumber}>
+                {loading ? '...' : (stats.upcomingCount ?? 0)}
+              </Text>
               <Text style={styles.statLabel}>{t('classes.upcoming')}</Text>
               <Ionicons name="calendar" size={24} color={colors.primary} />
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.completedCount}</Text>
+              <Text style={styles.statNumber}>
+                {loading ? '...' : (stats.completedCount ?? 0)}
+              </Text>
               <Text style={styles.statLabel}>{t('classes.completed')}</Text>
               <Ionicons name="checkmark-circle" size={24} color={colors.success} />
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.totalLessons}</Text>
+              <Text style={styles.statNumber}>
+                {loading ? '...' : (stats.totalLessons ?? 0)}
+              </Text>
               <Text style={styles.statLabel}>{t('profile.totalLessons')}</Text>
               <Ionicons name="trophy" size={24} color={colors.warning} />
             </View>
           </View>
 
           {/* Additional Stats Row */}
-          {stats.totalLessons > 0 && (
+          {!loading && (stats.totalLessons ?? 0) > 0 && (
             <View style={styles.additionalStats}>
               <View style={styles.additionalStatCard}>
                 <View style={styles.statRow}>
                   <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.additionalStatLabel}>{t('profile.thisMonth')}</Text>
                 </View>
-                <Text style={styles.additionalStatNumber}>{stats.thisMonthCount} {t('classes.lessons')}</Text>
+                <Text style={styles.additionalStatNumber}>
+                  {loading ? '...' : `${stats.thisMonthCount ?? 0} ${t('classes.lessons')}`}
+                </Text>
               </View>
               
               <View style={styles.additionalStatCard}>
@@ -323,7 +483,9 @@ export default function ClassHistoryScreen() {
                   <Ionicons name="trending-up-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.additionalStatLabel}>{t('profile.completionRate')}</Text>
                 </View>
-                <Text style={styles.additionalStatNumber}>%{stats.completionRate}</Text>
+                <Text style={styles.additionalStatNumber}>
+                  {loading ? '...' : `%${stats.completionRate ?? 0}`}
+                </Text>
               </View>
 
               <View style={styles.additionalStatCard}>
@@ -331,7 +493,9 @@ export default function ClassHistoryScreen() {
                   <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.additionalStatLabel}>{t('profile.thisWeek')}</Text>
                 </View>
-                <Text style={styles.additionalStatNumber}>{stats.thisWeekCount} {t('classes.lessons')}</Text>
+                <Text style={styles.additionalStatNumber}>
+                  {loading ? '...' : `${stats.thisWeekCount ?? 0} ${t('classes.lessons')}`}
+                </Text>
               </View>
             </View>
           )}
@@ -347,10 +511,15 @@ export default function ClassHistoryScreen() {
                 ]}
                 onPress={() => setSelectedTab(tab.id)}
               >
-                <Text style={[
-                  styles.tabText,
-                  selectedTab === tab.id && styles.activeTabText
-                ]}>
+                <Text 
+                  style={[
+                    styles.tabText,
+                    selectedTab === tab.id && styles.activeTabText
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.8}
+                >
                   {tab.name}
                 </Text>
                 <View style={[
@@ -442,7 +611,7 @@ export default function ClassHistoryScreen() {
                     {lesson.reason && (
                       <View style={styles.detailRow}>
                         <Ionicons name="information-circle-outline" size={16} color={colors.error} />
-                        <Text style={[styles.detailText, { color: colors.error }]}>{lesson.reason}</Text>
+                        <Text style={[styles.detailText, { color: colors.error }]}>{translateCancelReason(t, lesson.reason)}</Text>
                       </View>
                     )}
                   </View>
@@ -468,18 +637,19 @@ export default function ClassHistoryScreen() {
                       <TouchableOpacity
                         style={[
                           styles.cancelButton,
-                          !canCancelLesson(lesson) && styles.cancelButtonWarning
+                          !canCancelLesson(lesson) && styles.cancelButtonDisabled
                         ]}
                         onPress={() => handleCancelClass(lesson)}
+                        disabled={!canCancelLesson(lesson)}
                       >
                         <Ionicons name="close-circle-outline" size={18} color={
-                          canCancelLesson(lesson) ? colors.error : colors.warning
+                          canCancelLesson(lesson) ? colors.error : colors.gray
                         } />
                         <Text style={[
                           styles.cancelButtonText,
-                          !canCancelLesson(lesson) && styles.cancelButtonWarningText
+                          !canCancelLesson(lesson) && styles.cancelButtonDisabledText
                         ]}>
-                          {canCancelLesson(lesson) ? t('classes.cancel') : t('classes.cancel') + '*'}
+                          {canCancelLesson(lesson) ? t('classes.cancel') : t('classes.cannotCancel')}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -492,7 +662,7 @@ export default function ClassHistoryScreen() {
           {/* Bottom spacing */}
           <View style={{ height: 120 }} />
         </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -601,7 +771,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.white,
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     marginHorizontal: 4,
     borderRadius: 12,
     shadowColor: colors.black,
@@ -612,25 +782,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    minHeight: 44,
   },
   activeTab: {
     backgroundColor: colors.primary,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginRight: 8,
+    marginRight: 6,
+    flex: 1,
+    textAlign: 'center',
+    numberOfLines: 1,
+    adjustsFontSizeToFit: true,
+    minimumFontScale: 0.8,
   },
   activeTabText: {
     color: colors.white,
   },
   tabBadge: {
     backgroundColor: colors.lightGray,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
-    minWidth: 20,
+    minWidth: 18,
+    flexShrink: 0,
   },
   activeTabBadge: {
     backgroundColor: colors.white + '30',
@@ -762,8 +939,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error + '15',
     borderRadius: 12,
   },
-  cancelButtonWarning: {
-    backgroundColor: colors.warning + '15',
+  cancelButtonDisabled: {
+    backgroundColor: colors.gray + '10',
+    opacity: 0.6,
   },
   cancelButtonText: {
     color: colors.error,
@@ -771,8 +949,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 6,
   },
-  cancelButtonWarningText: {
-    color: colors.warning,
+  cancelButtonDisabledText: {
+    color: colors.gray,
   },
   noCancelInfo: {
     flexDirection: 'row',

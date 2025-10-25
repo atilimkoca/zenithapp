@@ -8,8 +8,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../constants/colors';
+import { useI18n } from '../context/I18nContext';
 
 export default function SplashScreen({ navigation }) {
+  const { t } = useI18n();
   const fadeAnim = new Animated.Value(0);
   const scaleAnim = new Animated.Value(0.8);
 
@@ -59,7 +61,7 @@ export default function SplashScreen({ navigation }) {
         </View>
         
         <Text style={styles.title}>Zénith</Text>
-        <Text style={styles.subtitle}>Pilates + Yoga Studio</Text>
+        <Text style={styles.subtitle}>{t('auth.studioSubtitle')}</Text>
         
         <View style={styles.loadingContainer}>
           <Animated.View style={[styles.loadingDot, { opacity: fadeAnim }]} />

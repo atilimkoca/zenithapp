@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const trainerService = {
@@ -16,25 +16,25 @@ export const trainerService = {
       trainersSnapshot.forEach((doc) => {
         const trainerData = doc.data();
         
-        // Only include active trainers
-        if (trainerData.status === 'active') {
-          trainers.push({
-            id: doc.id,
-            displayName: trainerData.displayName || `${trainerData.firstName || ''} ${trainerData.lastName || ''}`.trim(),
-            firstName: trainerData.firstName || '',
-            lastName: trainerData.lastName || '',
-            email: trainerData.email || '',
-            profileImage: trainerData.profileImage || null,
-            specializations: trainerData.trainerProfile?.specializations || [],
-            bio: trainerData.trainerProfile?.bio || '',
-            experience: trainerData.trainerProfile?.experience || '',
-            certifications: trainerData.trainerProfile?.certifications || [],
-            isActive: trainerData.trainerProfile?.isActive !== false,
-            rating: trainerData.trainerProfile?.rating || 0,
-            totalClasses: trainerData.trainerProfile?.totalClasses || 0,
-            joinedDate: trainerData.createdAt || trainerData.trainerProfile?.joinedDate
-          });
-        }
+        // Include all trainers for admin view (not just active ones)
+        trainers.push({
+          id: doc.id,
+          displayName: trainerData.displayName || `${trainerData.firstName || ''} ${trainerData.lastName || ''}`.trim(),
+          firstName: trainerData.firstName || '',
+          lastName: trainerData.lastName || '',
+          email: trainerData.email || '',
+          profileImage: trainerData.profileImage || null,
+          specializations: trainerData.trainerProfile?.specializations || [],
+          bio: trainerData.trainerProfile?.bio || '',
+          experience: trainerData.trainerProfile?.experience || '',
+          certifications: trainerData.trainerProfile?.certifications || [],
+          isActive: trainerData.status === 'active' && trainerData.trainerProfile?.isActive !== false,
+          status: trainerData.status || 'active',
+          rating: trainerData.trainerProfile?.rating || 0,
+          totalClasses: trainerData.trainerProfile?.totalClasses || 0,
+          totalLessons: trainerData.trainerProfile?.totalLessons || 0,
+          joinedDate: trainerData.createdAt || trainerData.trainerProfile?.joinedDate
+        });
       });
 
       return {
@@ -215,6 +215,42 @@ export const trainerService = {
         error: error.code,
         message: 'Eğitmen dersleri yüklenirken hata oluştu.',
         lessons: []
+      };
+    }
+  },
+
+  // Update trainer status (for admin)
+  updateTrainerStatus: async (trainerId, status, adminId) => {
+    try {
+      const trainerRef = doc(db, 'users', trainerId);
+      const trainerDoc = await getDoc(trainerRef);
+      
+      if (!trainerDoc.exists()) {
+        return {
+          success: false,
+          message: 'Eğitmen bulunamadı.'
+        };
+      }
+      
+      const trainerData = trainerDoc.data();
+      
+      await updateDoc(trainerRef, {
+        status: status,
+        'trainerProfile.isActive': status === 'active',
+        updatedAt: new Date().toISOString(),
+        updatedBy: adminId
+      });
+      
+      return {
+        success: true,
+        message: `Eğitmen durumu ${status === 'active' ? 'aktif' : 'pasif'} olarak güncellendi.`
+      };
+    } catch (error) {
+      console.error('Error updating trainer status:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Eğitmen durumu güncellenirken hata oluştu.'
       };
     }
   }

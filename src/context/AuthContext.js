@@ -66,6 +66,21 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, [initializing]);
 
+  const logout = async () => {
+    try {
+      await logoutUser();
+      setUser(null);
+      setUserData(null);
+      setApprovalStatus(null);
+      setUserDataLoaded(false);
+    } catch (error) {
+      console.error('Logout error in AuthContext:', error);
+      throw error;
+    }
+  };
+
+  const isAdminRole = !!userData && (userData.role === 'admin' || userData.role === 'instructor');
+
   const value = {
     user,
     userData,
@@ -73,11 +88,13 @@ export const AuthProvider = ({ children }) => {
     initializing: initializing || (!!user && !userDataLoaded), // Keep initializing true until user data is loaded
     approvalStatus,
     isAuthenticated: !!user,
-    isApproved: !!user && approvalStatus === 'approved',
-    isPending: !!user && approvalStatus === 'pending',
-    isRejected: !!user && approvalStatus === 'rejected',
+    isApproved: !!user && (approvalStatus === 'approved' || isAdminRole),
+    isPending: !!user && !isAdminRole && approvalStatus === 'pending',
+    isRejected: !!user && !isAdminRole && approvalStatus === 'rejected',
+    isAdmin: !!user && isAdminRole,
     setUserData, // Allow manual updates to user data
     setApprovalStatus, // Allow manual updates to approval status
+    logout, // Expose logout function
   };
 
   return (

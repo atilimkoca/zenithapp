@@ -38,7 +38,8 @@ export const sendNotificationWithPush = async (userId, title, message, type = 'g
         type,
         createdAt: serverTimestamp(),
         isRead: false,
-        recipients: 'user'
+        recipients: 'user',
+        source: 'mobile-admin' // Mark as mobile-created
       };
 
       const docRef = await addDoc(collection(db, 'notifications'), notificationData);
@@ -62,6 +63,29 @@ export const sendNotificationWithPush = async (userId, title, message, type = 'g
 // Send broadcast notification to all users with FCM push
 export const sendBroadcastNotificationWithPush = async (title, message, type = 'general') => {
   try {
+    console.log('Sending broadcast notification:', { title, message, type });
+
+    // Create a unique signature for this exact notification
+    const notificationSignature = `${title.trim()}_${message.trim()}_${type}`;
+    const currentTime = Date.now();
+    
+    // Check global memory for recent identical notifications (prevent rapid duplicates)
+    const recentKey = `broadcast_${notificationSignature}`;
+    if (global[recentKey] && (currentTime - global[recentKey]) < 10000) { // 10 second protection
+      console.warn('🚫 Preventing duplicate broadcast within 10 seconds:', title);
+      return {
+        success: false,
+        message: 'Duplicate notification blocked - same notification sent too recently'
+      };
+    }
+    
+    // Mark this notification as recently sent
+    global[recentKey] = currentTime;
+    
+    // Clean up after 30 seconds
+    setTimeout(() => {
+      delete global[recentKey];
+    }, 30000);
 
     // Create notification object
     const notification = {
@@ -89,9 +113,11 @@ export const sendBroadcastNotificationWithPush = async (title, message, type = '
         type,
         createdAt: serverTimestamp(),
         isRead: false,
-        recipients: 'all'
+        recipients: 'all',
+        source: 'mobile-admin' // Mark as mobile-created
       };
 
+      console.log('Saving to Firestore:', notificationData);
       const docRef = await addDoc(collection(db, 'notifications'), notificationData);
       
       return {
@@ -239,5 +265,100 @@ export const adminNotificationUtils = {
       `Hesabınıza ${creditsAdded} ders kredisi eklendi. Toplam krediniz: ${totalCredits}`,
       'credit'
     );
+  },
+
+  // Get notification templates
+  getNotificationTemplates: () => {
+    return [
+      {
+        id: 'welcome',
+        title: 'Hoş Geldiniz!',
+        message: 'Zenith Studio ailesine hoş geldiniz. Sağlıklı yaşam yolculuğunuz başlıyor!',
+        type: 'welcome'
+      },
+      {
+        id: 'lesson_reminder',
+        title: 'Ders Hatırlatması',
+        message: 'Yaklaşan dersinizi unutmayın! Sizi bekliyoruz.',
+        type: 'lesson'
+      },
+      {
+        id: 'package_expires',
+        title: 'Paket Süreniz Dolmak Üzere',
+        message: 'Paket süreniz 3 gün içinde dolacak. Yenilemeyi unutmayın!',
+        type: 'credit'
+      },
+      {
+        id: 'maintenance',
+        title: 'Bakım Duyurusu',
+        message: 'Sistem bakımı nedeniyle hizmet geçici olarak kesintiye uğrayabilir.',
+        type: 'system'
+      },
+      {
+        id: 'new_feature',
+        title: 'Yeni Özellik!',
+        message: 'Yeni özelliklerimizi keşfedin ve deneyiminizi geliştirin.',
+        type: 'general'
+      },
+      {
+        id: 'promotion',
+        title: 'Özel Kampanya',
+        message: 'Sınırlı süre için özel indirimlerimizden yararlanın!',
+        type: 'promotion'
+      }
+    ];
+  },
+
+  // Send broadcast notification (updated interface for AdminNotificationsScreen)
+  sendBroadcastNotification: async (notificationData) => {
+    console.log('Received notification data:', notificationData);
+    
+    const { title, message, body, type, priority, targetAudience } = notificationData;
+    
+    // Use message if available, otherwise fall back to body
+    const notificationMessage = message || body;
+    
+    if (!title || !notificationMessage) {
+      console.error('Missing required fields: title or message');
+      return {
+        success: false,
+        message: 'Title and message are required'
+      };
+    }
+    
+    // Create a unique hash for deduplication
+    const notificationHash = `${title.trim()}_${notificationMessage.trim()}_${type || 'general'}`;
+    const timestamp = Date.now();
+    
+    // Check if this exact notification was sent recently (within 30 seconds)
+    const recentKey = `recent_notification_${notificationHash}`;
+    const lastSent = global[recentKey];
+    
+    if (lastSent && (timestamp - lastSent) < 30000) {
+      console.warn('🚫 Duplicate notification prevented:', { title, notificationMessage });
+      return {
+        success: false,
+        message: 'Duplicate notification prevented. Same notification sent recently.'
+      };
+    }
+    
+    // Mark this notification as recently sent
+    global[recentKey] = timestamp;
+    
+    // Clean up old entries (prevent memory leaks)
+    setTimeout(() => {
+      delete global[recentKey];
+    }, 60000); // Clear after 1 minute
+    
+    // For now, use the existing broadcast function
+    // In future, you can implement audience filtering based on targetAudience
+    const result = await sendBroadcastNotificationWithPush(
+      title,
+      notificationMessage,
+      type || 'general'
+    );
+    
+    console.log('✅ Broadcast notification sent:', { title, success: result.success });
+    return result;
   }
 };
