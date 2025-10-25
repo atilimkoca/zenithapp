@@ -127,9 +127,7 @@ export default function AdminUserManagementScreen({ navigation }) {
     <UserListItem user={item} onPress={() => handleUserPress(item)} />
   );
 
-  const searchPlaceholder = language === 'tr'
-    ? 'Üye ara...'
-    : t('searchMembers') || 'Search members...';
+  const searchPlaceholder = 'Üye ara...';
 
   return (
     <View style={styles.container}>
