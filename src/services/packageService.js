@@ -123,6 +123,7 @@ const packageService = {
         ...sanitized,
         isActive: sanitized.isActive ?? true,
         features: Array.isArray(sanitized.features) ? sanitized.features : [],
+        packageType: sanitized.packageType || 'group', // Default to 'group' if not specified
         createdAt: now,
         updatedAt: now,
       };

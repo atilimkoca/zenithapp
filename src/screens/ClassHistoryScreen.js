@@ -49,6 +49,18 @@ const translateCancelReason = (t, reason) => {
   return reason; // Return original if no translation found
 };
 
+const formatHoursForLanguage = (hours, language) => {
+  if (hours === null || hours === undefined || Number.isNaN(hours)) {
+    return '0';
+  }
+  const normalized = Math.max(0, hours);
+  const formatted = normalized.toFixed(1);
+  if (language === 'tr') {
+    return formatted.replace('.', ',');
+  }
+  return formatted;
+};
+
 // Helper function to calculate this week's lesson count
 const calculateThisWeekCount = (lessons) => {
   if (!lessons || !Array.isArray(lessons)) return 0;
@@ -306,6 +318,7 @@ export default function ClassHistoryScreen() {
   const handleCancelClass = (lesson) => {
     // First check if lesson can be cancelled based on time
     let timeCheckMessage = '';
+    let hoursUntilLesson = null;
     try {
       let lessonDateTime;
       
@@ -318,10 +331,11 @@ export default function ClassHistoryScreen() {
       
       const now = new Date();
       const timeDiff = lessonDateTime.getTime() - now.getTime();
-      const hoursUntilLesson = timeDiff / (1000 * 60 * 60);
+      hoursUntilLesson = timeDiff / (1000 * 60 * 60);
       
-      if (hoursUntilLesson < 10) {
-        timeCheckMessage = `\n⚠️ ${t('classes.cancelNote')} (${Math.max(0, hoursUntilLesson).toFixed(1)} ${t('time.hoursLeft')})`;
+      if (hoursUntilLesson < 8) {
+        const formattedHours = formatHoursForLanguage(hoursUntilLesson, currentLanguage);
+        timeCheckMessage = `\n⚠️ ${t('classes.cancelNote')} (${formattedHours} ${t('time.hours') || ''})`;
       }
     } catch (error) {
       console.warn('Time check failed:', error);
@@ -342,8 +356,16 @@ export default function ClassHistoryScreen() {
               Alert.alert(t('success') + '! ✅', message);
               loadUserLessons(); // Refresh the lessons
             } else {
-              const message = result.messageKey ? t(result.messageKey) : result.message;
-              Alert.alert(t('error'), message);
+              let errorMessage;
+              if (result.messageKey === 'classes.cancelTooLate') {
+                const hoursValue = result.data?.hoursUntilLesson ?? hoursUntilLesson;
+                const formattedHours = formatHoursForLanguage(hoursValue, currentLanguage);
+                errorMessage = `${t('classes.cancelTooLateMessage') || 'Ders başlamadan 8 saat öncesine kadar iptal edilebilir.'}\n${t('classes.hoursLeftLabel') || t('time.hoursLeft') || 'Time left'}: ${formattedHours} ${t('time.hours') || ''}`;
+              } else {
+                errorMessage = result.messageKey ? t(result.messageKey) : result.message;
+              }
+
+              Alert.alert(t('error'), errorMessage);
             }
           }
         }
@@ -407,7 +429,7 @@ export default function ClassHistoryScreen() {
       const hoursUntilLesson = timeDiff / (1000 * 60 * 60);
       
       
-      return hoursUntilLesson >= 10; // Can cancel if more than 10 hours away
+      return hoursUntilLesson >= 8; // Can cancel if at least 8 hours away
     } catch (error) {
       console.warn('Error checking cancel eligibility:', error);
       return true; // Allow cancellation if we can't check time properly

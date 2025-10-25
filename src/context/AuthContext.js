@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChange, getCurrentUserData, logoutUser } from '../services/authService';
+import { db } from '../config/firebase';
 
 const AuthContext = createContext({});
 
@@ -65,6 +67,38 @@ export const AuthProvider = ({ children }) => {
     // Cleanup subscription on unmount
     return unsubscribe;
   }, [initializing]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      return undefined;
+    }
+
+    const userDocRef = doc(db, 'users', user.uid);
+
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const latestData = snapshot.data();
+          setUserData(latestData);
+          setApprovalStatus(latestData.status || 'pending');
+          setUserDataLoaded(true);
+        } else {
+          console.warn(`User document ${user.uid} no longer exists.`);
+          setUserData(null);
+          setApprovalStatus(null);
+          setUserDataLoaded(false);
+        }
+      },
+      (error) => {
+        console.error('User data snapshot error:', error);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid]);
 
   const logout = async () => {
     try {

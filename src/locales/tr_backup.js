@@ -176,7 +176,9 @@
     duration: 'dakika',
     participants: 'kişi',
     cancelConfirm: 'dersini iptal etmek istediğinizden emin misiniz?',
-    cancelNote: 'Not: Normalde ders başlamadan 2 saat öncesine kadar iptal edilebilir.',
+    cancelNote: 'Not: Normalde ders başlamadan 8 saat öncesine kadar iptal edilebilir.',
+    cancelTooLateMessage: 'Ders başlamadan 8 saat öncesine kadar iptal edebilirsiniz.',
+    hoursLeftLabel: 'Kalan süre',
     cancelLessonTitle: 'Dersi İptal Et',
     lessons: 'ders',
     general: 'Genel',
@@ -248,11 +250,11 @@
     fullButton: 'Dolu',
     tooLateButton: 'Çok Geç',
     tooLateTitle: 'Rezervasyon Çok Geç',
-    tooLateMessage: 'Bu ders başlamadan 1 saat öncesine kadar rezerve edilebilir.',
+    tooLateMessage: 'Bu ders başlamadan 2 saat öncesine kadar rezerve edilebilir.',
     minutes: 'dakika',
     minutesShort: 'dk',
     infoTitle: 'Rezervasyon Rehberi',
-    infoText: '• Dersler başlamadan 1 saat öncesine kadar rezerve edilebilir\n• Dersler başlamadan 10 saat öncesine kadar iptal edilebilir\n• İlk kez katılacaksanız 15 dakika önceden gelin\n• Gerekli ekipmanlar derste sağlanır\n• Rahat kıyafet giymeyi unutmayın',
+    infoText: '• Dersler başlamadan 2 saat öncesine kadar rezerve edilebilir\n• Dersler başlamadan 8 saat öncesine kadar iptal edilebilir\n• İlk kez katılacaksanız 15 dakika önceden gelin\n• Gerekli ekipmanlar derste sağlanır\n• Rahat kıyafet giymeyi unutmayın',
     beginner: 'Başlangıç',
     intermediate: 'Orta',
     advanced: 'İleri',
@@ -444,7 +446,5 @@
     profileUpdating: 'Profil güncelleniyor...',
   },
 };
-
-
 
 

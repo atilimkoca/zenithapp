@@ -9,6 +9,8 @@ import PendingApprovalScreen from './src/screens/PendingApprovalScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminUserManagementScreen from './src/screens/admin/AdminUserManagementScreen';
+import AdminUserDetailScreen from './src/screens/admin/AdminUserDetailScreen';
+import AdminUserMembershipScreen from './src/screens/admin/AdminUserMembershipScreen';
 import AdminLessonManagementScreen from './src/screens/admin/AdminLessonManagementScreen';
 import AdminCreateLessonScreen from './src/screens/admin/AdminCreateLessonScreen';
 import AdminEditLessonScreen from './src/screens/admin/AdminEditLessonScreen';
@@ -136,6 +138,20 @@ function Navigation() {
           <Stack.Screen 
             name="AdminTabs" 
             component={AdminTabNavigator}
+          />
+          <Stack.Screen
+            name="AdminUserDetail"
+            component={AdminUserDetailScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
+          />
+          <Stack.Screen
+            name="AdminUserMembership"
+            component={AdminUserMembershipScreen}
+            options={{
+              animationTypeForReplace: 'push',
+            }}
           />
           <Stack.Screen 
             name="CreateLesson" 

@@ -248,6 +248,8 @@ export const lessonService = {
               currentParticipants: data.participants ? data.participants.length : 0,
               availableSpots: data.maxParticipants - (data.participants ? data.participants.length : 0),
               isRecurring: data.isRecurring || false,
+              // Package type information
+              lessonPackageType: data.maxParticipants === 1 ? 'one-on-one' : 'group',
               // Enhanced trainer information
               instructor: trainer ? trainer.displayName : (data.trainerName || 'No Trainer Information'),
               trainerSpecializations: trainer ? trainer.specializations : [],

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/colors';
 import { lessonService, getCategoryInfo } from '../services/lessonService';
+import { userLessonService } from '../services/userLessonService';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import UniqueHeader from '../components/UniqueHeader';
+import DateCarouselPicker from '../components/DateCarouselPicker';
 
 const { width } = Dimensions.get('window');
 
@@ -30,8 +32,106 @@ const translateLessonDescription = (t, description) => {
   return translated === translationKey ? description : translated;
 };
 
+const normalizePackageType = (value) => {
+  if (!value) return null;
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) return null;
+
+  const collapsed = normalized.replace(/[^a-z0-9]/g, '');
+
+  const oneOnOneKeywords = [
+    'bireysel',
+    'oneonone',
+    'onetoone',
+    '1on1',
+    '1to1',
+    'private',
+    'privatelesson',
+    'privateclass'
+  ];
+
+  const groupKeywords = [
+    'group',
+    'groups',
+    'groupclass',
+    'groupclasses',
+    'grouplesson',
+    'grup',
+    'class',
+    'classes'
+  ];
+
+  if (oneOnOneKeywords.includes(collapsed)) {
+    return 'one-on-one';
+  }
+
+  if (groupKeywords.includes(collapsed)) {
+    return 'group';
+  }
+
+  return null;
+};
+
+const getLessonAccessType = (lesson) => {
+  if (!lesson) {
+    return 'group';
+  }
+
+  const fromLesson = normalizePackageType(
+    lesson.lessonPackageType || lesson.packageType || lesson.type
+  );
+
+  if (fromLesson) {
+    return fromLesson;
+  }
+
+  if (typeof lesson.maxParticipants === 'number') {
+    return lesson.maxParticipants <= 1 ? 'one-on-one' : 'group';
+  }
+
+  return 'group';
+};
+
+const formatDateKey = (value) => {
+  if (!value) return null;
+
+  let dateInstance = null;
+
+  if (typeof value === 'string') {
+    dateInstance = new Date(value);
+  } else if (value instanceof Date) {
+    dateInstance = value;
+  } else if (value?.seconds) {
+    dateInstance = new Date(value.seconds * 1000);
+  } else if (typeof value?.toDate === 'function') {
+    dateInstance = value.toDate();
+  }
+
+  if (!dateInstance || Number.isNaN(dateInstance.getTime())) {
+    return null;
+  }
+
+  const year = dateInstance.getFullYear();
+  const month = `${dateInstance.getMonth() + 1}`.padStart(2, '0');
+  const day = `${dateInstance.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatHoursForLanguage = (hours, language) => {
+  if (hours === null || hours === undefined || Number.isNaN(hours)) {
+    return '0';
+  }
+  const normalized = Math.max(0, hours);
+  const formatted = normalized.toFixed(1);
+  if (language === 'tr') {
+    return formatted.replace('.', ',');
+  }
+  return formatted;
+};
+
 export default function ClassSelectionScreen() {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const { t, language: currentLanguage } = useI18n();
   const [lessons, setLessons] = useState([]);
   const [groupedLessons, setGroupedLessons] = useState([]);
@@ -41,17 +141,9 @@ export default function ClassSelectionScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedDateKey, setSelectedDateKey] = useState(null);
   const scrollY = new Animated.Value(0);
   
-  // Filter options (replacing categories)
-  const filterOptions = [
-    { id: 'all', name: t('classSelection.allFilter') || 'Tümü', icon: 'grid-outline', color: colors.primary },
-    { id: 'today', name: t('classSelection.todayFilter') || 'Bugün', icon: 'today-outline', color: colors.success },
-    { id: 'tomorrow', name: t('classSelection.tomorrowFilter') || 'Yarın', icon: 'calendar-outline', color: colors.warning },
-    { id: 'available', name: t('classSelection.availableFilter') || 'Müsait', icon: 'checkmark-circle-outline', color: colors.info },
-  ];
-
   const formatDisplayDate = (value) => {
     if (!value) return '';
 
@@ -94,7 +186,37 @@ export default function ClassSelectionScreen() {
 
   useEffect(() => {
     filterLessons();
-  }, [groupedLessons, searchQuery, selectedFilter]);
+  }, [groupedLessons, searchQuery, userData, selectedDateKey]);
+
+  const availableDateKeys = useMemo(() => {
+    const uniqueKeys = new Set();
+    groupedLessons.forEach(group => {
+      const directKey = formatDateKey(group.date || group.originalDate);
+      if (directKey) {
+        uniqueKeys.add(directKey);
+      } else if (group.date) {
+        uniqueKeys.add(group.date);
+      }
+    });
+
+    return Array.from(uniqueKeys).sort();
+  }, [groupedLessons]);
+
+  useEffect(() => {
+    if (availableDateKeys.length === 0) {
+      if (selectedDateKey !== null) {
+        setSelectedDateKey(null);
+      }
+      return;
+    }
+
+    setSelectedDateKey(prev => {
+      if (prev && availableDateKeys.includes(prev)) {
+        return prev;
+      }
+      return availableDateKeys[0];
+    });
+  }, [availableDateKeys]);
 
   // Re-format dates when language changes
   useEffect(() => {
@@ -175,8 +297,50 @@ export default function ClassSelectionScreen() {
   };
 
   const filterLessons = () => {
+    // Debug logging
+    console.log('🔍 Filter Debug - User package info:', {
+      hasUser: !!user,
+      hasUserData: !!userData,
+      hasPackageInfo: !!userData?.packageInfo,
+      packageType: userData?.packageInfo?.packageType,
+      packageName: userData?.packageInfo?.packageName,
+      fullPackageInfo: userData?.packageInfo,
+      selectedDateKey,
+      normalizedType: normalizePackageType(userData?.packageInfo?.packageType)
+    });
+
     let filteredGroups = groupedLessons.map(group => {
+      if (selectedDateKey) {
+        const groupDateKey = formatDateKey(group.date || group.originalDate);
+        if (groupDateKey !== selectedDateKey) {
+          return {
+            ...group,
+            lessons: []
+          };
+        }
+      }
+
       let filteredLessonsInGroup = group.lessons;
+
+      // Filter by user's specific package type
+      const rawPackageType = userData?.packageInfo?.packageType;
+      if (rawPackageType) {
+        const normalizedUserPackageType = normalizePackageType(rawPackageType);
+        const userAccessType = normalizedUserPackageType === 'one-on-one' ? 'one-on-one' : 'group';
+        console.log(`📦 Filtering lessons for package type: "${rawPackageType}" (normalized: "${userAccessType}")`);
+
+        filteredLessonsInGroup = filteredLessonsInGroup.filter(lesson => {
+          const lessonAccessType = getLessonAccessType(lesson);
+          const shouldInclude = userAccessType === 'one-on-one'
+            ? lessonAccessType === 'one-on-one'
+            : lessonAccessType !== 'one-on-one';
+          
+          console.log(`   📋 Checking lesson: "${lesson.title}" access "${lessonAccessType}" -> ${shouldInclude ? 'include' : 'skip'}`);
+          return shouldInclude;
+        });
+      } else {
+        console.log('⚠️ No package type found - showing all lessons');
+      }
 
       // Filter by search query (search in title and instructor name)
       if (searchQuery.trim()) {
@@ -185,26 +349,6 @@ export default function ClassSelectionScreen() {
           lesson.instructor?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           lesson.type?.toLowerCase().includes(searchQuery.toLowerCase())
         );
-      }
-
-      // Filter by selected filter
-      if (selectedFilter !== 'all') {
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        filteredLessonsInGroup = filteredLessonsInGroup.filter(lesson => {
-          switch (selectedFilter) {
-            case 'today':
-              return new Date(lesson.scheduledDate).toDateString() === today.toDateString();
-            case 'tomorrow':
-              return new Date(lesson.scheduledDate).toDateString() === tomorrow.toDateString();
-            case 'available':
-              return lesson.currentParticipants < lesson.maxParticipants;
-            default:
-              return true;
-          }
-        });
       }
 
       return {
@@ -226,16 +370,16 @@ export default function ClassSelectionScreen() {
       return;
     }
 
-    // Check if lesson is too close to start (within 1 hour)
+    // Check if lesson is too close to start (within 2 hours)
     const now = new Date();
     const lessonDateTime = new Date(lesson.scheduledDate);
     const timeUntilLesson = lessonDateTime.getTime() - now.getTime();
-    const oneHourInMs = 60 * 60 * 1000;
+    const twoHoursInMs = 2 * 60 * 60 * 1000;
     
-    if (timeUntilLesson <= oneHourInMs && timeUntilLesson > 0) {
+    if (timeUntilLesson <= twoHoursInMs && timeUntilLesson > 0) {
       Alert.alert(
         t('classSelection.tooLateTitle') || 'Rezervasyon Çok Geç', 
-        t('classSelection.tooLateMessage') || 'Bu ders başlamadan 1 saat öncesine kadar rezerve edilebilir.'
+        t('classSelection.tooLateMessage') || 'Bu ders başlamadan 2 saat öncesine kadar rezerve edilebilir.'
       );
       return;
     }
@@ -260,6 +404,70 @@ export default function ClassSelectionScreen() {
                 t('general.error') || 'Hata', 
                 result.messageKey ? t(result.messageKey) : result.message
               );
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCancelClass = (lesson) => {
+    if (!user) {
+      Alert.alert(t('general.error') || 'Hata', t('classSelection.loginRequired') || 'Rezervasyon yapmak için giriş yapmanız gerekiyor.');
+      return;
+    }
+
+    let lessonDateTime = new Date(lesson.scheduledDate);
+    if (lesson.startTime) {
+      const [hours, minutes] = lesson.startTime.split(':').map(Number);
+      lessonDateTime.setHours(hours || 0, minutes || 0, 0, 0);
+    }
+
+    const now = new Date();
+    const hoursUntilLesson = (lessonDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const formattedHoursLeft = formatHoursForLanguage(hoursUntilLesson, currentLanguage);
+
+    Alert.alert(
+      t('classes.cancelLessonTitle') || 'Dersi İptal Et',
+      `${lesson.title} ${t('classes.cancelConfirm') || 'dersini iptal etmek istediğinizden emin misiniz?'}\n\n${t('classSelection.instructor') || 'Eğitmen'}: ${lesson.instructor}\n${t('classSelection.time') || 'Zaman'}: ${lesson.formattedTime}\n${t('classSelection.date') || 'Tarih'}: ${lesson.formattedDate}\n${t('classes.cancelNote') ? `\n${t('classes.cancelNote')}` : ''}\n${t('classes.hoursLeftLabel') || t('time.hoursLeft') || 'Time left'}: ${formattedHoursLeft} ${t('time.hours') || ''}`,
+      [
+        { text: t('general.cancel') || 'İptal', style: 'cancel' },
+        {
+          text: t('classes.confirmCancel') || 'Dersi İptal Et',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const result = await userLessonService.cancelLessonBooking(lesson.id, user.uid);
+              if (result.success) {
+                Alert.alert(
+                  t('success') || 'Başarılı',
+                  result.messageKey ? t(result.messageKey) : result.message || (t('classes.cancelSuccessMessage') || 'Ders rezervasyonunuz başarıyla iptal edildi.')
+                );
+                await loadLessons();
+              } else {
+                let errorMessage;
+                if (result.messageKey === 'classes.cancelTooLate') {
+                  const hoursValue = result.data?.hoursUntilLesson ?? hoursUntilLesson;
+                  const formattedHours = formatHoursForLanguage(hoursValue, currentLanguage);
+                  errorMessage = `${t('classes.cancelTooLateMessage') || 'Ders başlamadan 8 saat öncesine kadar iptal edilebilir.'}\n${t('classes.hoursLeftLabel') || t('time.hoursLeft') || 'Time left'}: ${formattedHours} ${t('time.hours') || ''}`;
+                } else {
+                  errorMessage = result.messageKey ? t(result.messageKey) : result.message || (t('classes.cancelErrorMessage') || 'Rezervasyon iptal edilirken hata oluştu.');
+                }
+
+                Alert.alert(
+                  t('error') || 'Hata',
+                  errorMessage
+                );
+              }
+            } catch (error) {
+              console.error('Error cancelling lesson:', error);
+              Alert.alert(
+                t('error') || 'Hata',
+                t('classes.cancelErrorMessage') || 'Rezervasyon iptal edilirken hata oluştu.'
+              );
+            } finally {
+              setLoading(false);
             }
           }
         }
@@ -364,36 +572,11 @@ export default function ClassSelectionScreen() {
             </LinearGradient>
           </View>
 
-          {/* Modern Filter Pills */}
-          <View style={styles.section}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-              <View style={styles.filtersContainer}>
-                {filterOptions.map((filter) => (
-                  <TouchableOpacity 
-                    key={filter.id} 
-                    style={[
-                      styles.filterPill,
-                      selectedFilter === filter.id && [styles.filterPillSelected, { backgroundColor: filter.color }]
-                    ]}
-                    onPress={() => setSelectedFilter(filter.id)}
-                  >
-                    <Ionicons 
-                      name={filter.icon} 
-                      size={16} 
-                      color={selectedFilter === filter.id ? colors.white : filter.color} 
-                      style={styles.filterIcon}
-                    />
-                    <Text style={[
-                      styles.filterText,
-                      selectedFilter === filter.id && styles.filterTextSelected
-                    ]}>
-                      {filter.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
+          <DateCarouselPicker
+            dates={availableDateKeys}
+            selectedDate={selectedDateKey}
+            onSelectDate={setSelectedDateKey}
+          />
 
           {/* Available Classes with Enhanced Design */}
           <View style={styles.section}>
@@ -456,12 +639,65 @@ export default function ClassSelectionScreen() {
                     const isFullyBooked = lesson.currentParticipants >= lesson.maxParticipants;
                     const isUserBooked = lesson.participants && lesson.participants.includes(user?.uid);
                     
-                    // Check if lesson is too close to start (within 1 hour)
+                    // Check if lesson is too close to start (within 2 hours)
                     const now = new Date();
                     const lessonDateTime = new Date(lesson.scheduledDate);
                     const timeUntilLesson = lessonDateTime.getTime() - now.getTime();
-                    const oneHourInMs = 60 * 60 * 1000;
-                    const isTooLateToBook = timeUntilLesson <= oneHourInMs && timeUntilLesson > 0;
+                    const twoHoursInMs = 2 * 60 * 60 * 1000;
+                    const isTooLateToBook = timeUntilLesson <= twoHoursInMs && timeUntilLesson > 0;
+                    const eightHoursInMs = 8 * 60 * 60 * 1000;
+                    const canCancelBooking = isUserBooked && timeUntilLesson >= eightHoursInMs;
+                    const buttonMode = (() => {
+                      if (isUserBooked && canCancelBooking) return 'cancel';
+                      if (isUserBooked) return 'booked';
+                      if (isTooLateToBook) return 'tooLate';
+                      if (isFullyBooked) return 'full';
+                      return 'book';
+                    })();
+                    const buttonDisabled = ['full', 'tooLate', 'booked'].includes(buttonMode);
+                    const isMutedDisabled = ['full', 'tooLate'].includes(buttonMode);
+                    const buttonGradient = (() => {
+                      switch (buttonMode) {
+                        case 'cancel':
+                          return [colors.error, colors.error + 'CC'];
+                        case 'booked':
+                          return [colors.success, colors.success + 'DD'];
+                        case 'tooLate':
+                          return [colors.warning, colors.warning + 'CC'];
+                        case 'full':
+                          return [colors.lightGray, colors.gray];
+                        default:
+                          return [colors.primary, colors.primaryDark];
+                      }
+                    })();
+                    const buttonIcon = (() => {
+                      switch (buttonMode) {
+                        case 'cancel':
+                          return 'close-circle-outline';
+                        case 'booked':
+                          return 'checkmark-circle-outline';
+                        case 'tooLate':
+                          return 'time-outline';
+                        case 'full':
+                          return 'close-circle-outline';
+                        default:
+                          return 'add-circle-outline';
+                      }
+                    })();
+                    const buttonLabel = (() => {
+                      switch (buttonMode) {
+                        case 'cancel':
+                          return t('classes.cancel') || 'İptal Et';
+                        case 'booked':
+                          return t('classSelection.bookedButton') || 'Rezerve Edildi';
+                        case 'tooLate':
+                          return t('classSelection.tooLateButton') || 'Çok Geç';
+                        case 'full':
+                          return t('classSelection.fullButton') || 'Dolu';
+                        default:
+                          return t('classSelection.bookButton') || 'Rezerve Et';
+                      }
+                    })();
                     
                     const capacityPercentage = (lesson.currentParticipants / lesson.maxParticipants) * 100;
                     
@@ -609,42 +845,31 @@ export default function ClassSelectionScreen() {
                             <TouchableOpacity 
                               style={[
                                 styles.bookButton,
-                                (isFullyBooked || isUserBooked || isTooLateToBook) && styles.bookButtonDisabled
+                                buttonDisabled && styles.bookButtonDisabled
                               ]}
-                              onPress={() => handleBookClass(lesson)}
-                              disabled={isFullyBooked || isUserBooked || isTooLateToBook}
+                              onPress={() => {
+                                if (buttonMode === 'cancel') {
+                                  handleCancelClass(lesson);
+                                } else if (buttonMode === 'book') {
+                                  handleBookClass(lesson);
+                                }
+                              }}
+                              disabled={buttonDisabled}
                             >
                               <LinearGradient
-                                colors={isFullyBooked ? 
-                                  [colors.lightGray, colors.gray] : 
-                                  isTooLateToBook ?
-                                  [colors.warning, colors.warningDark || colors.warning + 'DD'] :
-                                  isUserBooked ?
-                                  [colors.success, colors.success + 'DD'] :
-                                  [colors.primary, colors.primaryDark]
-                                }
+                                colors={buttonGradient}
                                 style={styles.bookButtonGradient}
                               >
                                 <Ionicons 
-                                  name={isFullyBooked ? "close-circle-outline" : 
-                                       isTooLateToBook ? "time-outline" :
-                                       isUserBooked ? "checkmark-circle-outline" : 
-                                       "add-circle-outline"} 
+                                  name={buttonIcon} 
                                   size={18} 
-                                  color={(isFullyBooked || isTooLateToBook) ? colors.textSecondary : colors.white} 
+                                  color={isMutedDisabled ? colors.textSecondary : colors.white} 
                                 />
                                 <Text style={[
                                   styles.bookButtonText,
-                                  (isFullyBooked || isTooLateToBook) && styles.bookButtonTextDisabled
+                                  isMutedDisabled && styles.bookButtonTextDisabled
                                 ]}>
-                                  {isFullyBooked ? 
-                                    (t('classSelection.fullButton') || 'Dolu') : 
-                                    isTooLateToBook ?
-                                    (t('classSelection.tooLateButton') || 'Çok Geç') :
-                                    isUserBooked ?
-                                    (t('classSelection.bookedButton') || 'Rezerve Edildi') :
-                                    (t('classSelection.bookButton') || 'Rezerve Et')
-                                  }
+                                  {buttonLabel}
                                 </Text>
                               </LinearGradient>
                             </TouchableOpacity>
@@ -839,45 +1064,6 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 24,
     marginBottom: 20,
-  },
-  filtersScroll: {
-    marginHorizontal: -24,
-  },
-  filtersContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-  },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-    borderRadius: 25,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.gray,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  filterPillSelected: {
-    borderColor: 'transparent',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  filterIcon: {
-    marginRight: 6,
-  },
-  filterText: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  filterTextSelected: {
-    color: colors.white,
   },
 
   // Modern Section Headers

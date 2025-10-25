@@ -289,10 +289,14 @@ export const userLessonService = {
         const hoursUntilLesson = timeDiff / (1000 * 60 * 60);
         
         
-        if (hoursUntilLesson < 2) {
+        if (hoursUntilLesson < 8) {
           return {
             success: false,
-            message: `Ders başlamadan 2 saat öncesine kadar iptal edilebilir. Derse ${Math.max(0, hoursUntilLesson).toFixed(1)} saat kaldı.`
+            message: 'Lessons can be cancelled up to 8 hours before start time.',
+            messageKey: 'classes.cancelTooLate',
+            data: {
+              hoursUntilLesson: Math.max(0, hoursUntilLesson)
+            }
           };
         }
       } catch (timeError) {

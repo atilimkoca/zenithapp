@@ -14,6 +14,7 @@
   info: 'Info',
   yes: 'Yes',
   no: 'No',
+  searchMembers: 'Search members...',
   
   // Navigation
   navigation: {
@@ -40,6 +41,66 @@
     logoutConfirm: 'Are you sure you want to logout?',
     logoutButton: 'Logout',
     logoutDescription: 'Securely logout from your account',
+
+    // Login Screen
+    welcome: 'Welcome',
+    welcomeSubtitle: 'Sign in to Zénith Pilates & Yoga Studio',
+    emailPlaceholder: 'your@email.com',
+    passwordPlaceholder: 'Enter your password',
+    loginButton: 'Log In',
+    loggingIn: 'Logging in...',
+    noAccount: "Don't have an account? ",
+    registerLink: 'Register',
+
+    // Register Screen
+    createAccount: 'Create an Account',
+    registerSubtitle: 'Join Zénith Pilates & Yoga Studio',
+    firstNamePlaceholder: 'First name',
+    lastNamePlaceholder: 'Last name',
+    phoneNumberPlaceholder: 'Phone number',
+    phonePlaceholder: '+1 555 123 4567',
+    createPasswordPlaceholder: 'Create your password',
+    confirmPasswordPlaceholder: 'Re-enter your password',
+    registerButton: 'Sign Up',
+    registering: 'Creating account...',
+    alreadyHaveAccount: 'Already have an account? ',
+    loginLink: 'Log In',
+    loginLinkText: 'Log In',
+    termsAndConditions: 'I accept the Terms of Service',
+    agreeToTerms: '',
+    termsOfService: 'Terms of Service',
+    and: ' and ',
+    privacyPolicy: 'Privacy Policy',
+    agreeText: 'I accept the ',
+    termsAndPrivacyText: 'I accept the Terms of Service and Privacy Policy',
+    createAccountButton: 'Create Account',
+    creatingAccount: 'Creating account...',
+
+    // Validation Messages
+    emailRequired: 'Email is required',
+    invalidEmail: 'Please enter a valid email address',
+    passwordRequired: 'Password is required',
+    passwordMinLength: 'Password must be at least 6 characters',
+    firstNameRequired: 'First name is required',
+    lastNameRequired: 'Last name is required',
+    phoneRequired: 'Phone number is required',
+    confirmPasswordRequired: 'Password confirmation is required',
+    passwordsNotMatch: 'Passwords do not match',
+    termsRequired: 'You must accept the terms to continue',
+    invalidPhone: 'Please enter a valid phone number',
+
+    // Reset Password
+    resetPasswordSubtitle: 'Enter your email address to reset your password',
+    resetPasswordInfo: 'A password reset link will be sent to your email.',
+    resetEmailSent: 'Password reset email sent successfully.',
+    resetEmailError: 'Could not send password reset email.',
+    sendButton: 'Send',
+
+    // Account Status & Approval
+    accountCreatedSuccess: 'Your account has been created! Please wait for admin approval to access the app.',
+    accountPendingMessage: 'Your account is awaiting admin approval. You will have full access once approved.',
+    accountRejectedMessage: 'Your account has been rejected. Please contact us for more information.',
+    accountDeletedMessage: 'This account no longer exists. Please sign up again.',
   },
   
   // Profile
@@ -83,7 +144,9 @@
     duration: 'minutes',
     participants: 'people',
     cancelConfirm: 'are you sure you want to cancel this class?',
-    cancelNote: 'Note: Normally classes can be cancelled up to 2 hours before start time.',
+    cancelNote: 'Note: Classes can normally be cancelled up to 8 hours before start time.',
+    cancelTooLateMessage: 'You can cancel up to 8 hours before the class starts.',
+    hoursLeftLabel: 'Time left',
     cancelLessonTitle: 'Cancel Lesson',
     lessons: 'lessons',
     general: 'General',
@@ -167,13 +230,13 @@
     fullButton: 'Full',
     tooLateButton: 'Too Late',
     tooLateTitle: 'Booking Too Late',
-    tooLateMessage: 'This class can be booked until 1 hour before it starts.',
+    tooLateMessage: 'This class can be booked until 2 hours before it starts.',
     minutes: 'minutes',
     minutesShort: 'min',
     infoTitle: 'Booking Guide',
-    infoText: '• Lessons can be cancelled up to 2 hours before start time\n• First-time participants should arrive 15 minutes early\n• All required equipment is provided in class\n• Remember to wear comfortable clothing',
-    infoBulletTitle1: 'Cancellation Policy',
-    infoBullet1: 'Lessons can be cancelled up to 2 hours before start time',
+    infoText: '• Lessons can be booked until 2 hours before start time\n• Lessons can be cancelled up to 8 hours before start time\n• First-time participants should arrive 15 minutes early\n• All required equipment is provided in class\n• Remember to wear comfortable clothing',
+    infoBulletTitle1: 'Booking & Cancellation',
+    infoBullet1: 'Book up to 2 hours ahead and cancel up to 8 hours before start time',
     infoBulletTitle2: 'First Visit',
     infoBullet2: 'First-time participants should arrive 15 minutes early',
     infoBulletTitle3: 'Equipment',
@@ -405,6 +468,3 @@
     online: 'Online',
   },
 };
-
-
-

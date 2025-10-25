@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,33 @@ import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { adminLessonService as lessonService } from '../../services/lessonService';
 import UniqueHeader from '../../components/UniqueHeader';
+import DateCarouselPicker from '../../components/DateCarouselPicker';
+
+const formatDateKey = (value) => {
+  if (!value) return null;
+
+  let dateInstance = null;
+
+  if (typeof value === 'string') {
+    dateInstance = new Date(value);
+  } else if (value instanceof Date) {
+    dateInstance = value;
+  } else if (value?.seconds) {
+    dateInstance = new Date(value.seconds * 1000);
+  } else if (typeof value?.toDate === 'function') {
+    dateInstance = value.toDate();
+  }
+
+  if (!dateInstance || Number.isNaN(dateInstance.getTime())) {
+    return null;
+  }
+
+  const year = dateInstance.getFullYear();
+  const month = `${dateInstance.getMonth() + 1}`.padStart(2, '0');
+  const day = `${dateInstance.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
 
 export default function AdminLessonManagementScreen({ navigation }) {
   const { user, userData } = useAuth();
@@ -30,6 +57,7 @@ export default function AdminLessonManagementScreen({ navigation }) {
   const [filteredLessons, setFilteredLessons] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('upcoming');
+  const [selectedDateKey, setSelectedDateKey] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
@@ -77,7 +105,31 @@ export default function AdminLessonManagementScreen({ navigation }) {
 
   useEffect(() => {
     filterLessons();
-  }, [lessons, searchTerm, filterStatus]);
+  }, [lessons, searchTerm, filterStatus, selectedDateKey]);
+
+  const availableDateKeys = useMemo(() => {
+    const uniqueKeys = new Set();
+    lessons.forEach(lesson => {
+      const key = formatDateKey(lesson.scheduledDate);
+      if (key) {
+        uniqueKeys.add(key);
+      }
+    });
+    return Array.from(uniqueKeys).sort();
+  }, [lessons]);
+
+  useEffect(() => {
+    if (!availableDateKeys.length) {
+      if (selectedDateKey !== null) {
+        setSelectedDateKey(null);
+      }
+      return;
+    }
+
+    if (selectedDateKey && !availableDateKeys.includes(selectedDateKey)) {
+      setSelectedDateKey(availableDateKeys[0]);
+    }
+  }, [availableDateKeys, selectedDateKey]);
 
   // Reload lessons when screen comes back into focus (after editing/creating)
   useEffect(() => {
@@ -129,7 +181,10 @@ export default function AdminLessonManagementScreen({ navigation }) {
         matchesStatus = lesson.status === 'cancelled';
       }
 
-      return matchesSearch && matchesStatus;
+      const lessonDateKey = formatDateKey(lesson.scheduledDate);
+      const matchesDate = !selectedDateKey || lessonDateKey === selectedDateKey;
+
+      return matchesSearch && matchesStatus && matchesDate;
     });
 
     // Sort lessons by date - nearest first
@@ -446,6 +501,14 @@ export default function AdminLessonManagementScreen({ navigation }) {
           <FilterButton status="completed" label="Geçmiş Dersler" />
           <FilterButton status="cancelled" label="İptal Edilen" />
         </ScrollView>
+
+        <DateCarouselPicker
+          dates={availableDateKeys}
+          selectedDate={selectedDateKey}
+          onSelectDate={setSelectedDateKey}
+          allowClear
+          allLabel="Tümü"
+        />
 
         {/* Lessons List */}
         <ScrollView

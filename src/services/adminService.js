@@ -69,10 +69,11 @@ export const adminService = {
       if (packageData && packageData.id) {
         // Extract lesson count - try multiple field names for compatibility
         const lessonCount = packageData.lessonCount || packageData.lessons || packageData.classes || 0;
-        
+
         updateData.packageInfo = {
           packageId: packageData.id,
           packageName: packageData.name || 'Bilinmeyen Paket',
+          packageType: packageData.packageType || 'group', // Include package type
           lessonCount: lessonCount,
           assignedAt: now.toISOString(),
           expiryDate: expiryDate.toISOString()
@@ -84,6 +85,7 @@ export const adminService = {
         updateData.packageInfo = {
           packageId: null,
           packageName: 'Paket Atanmadı',
+          packageType: null,
           lessonCount: 0,
           assignedAt: now.toISOString(),
           expiryDate: expiryDate.toISOString()
@@ -151,6 +153,7 @@ export const adminService = {
         packageInfo: {
           packageId: packageData.id,
           packageName: packageData.name || 'Bilinmeyen Paket',
+          packageType: packageData.packageType || 'group', // Include package type
           lessonCount: lessonCount,
           assignedAt: now.toISOString(),
           expiryDate: expiryDate.toISOString(),
@@ -427,6 +430,92 @@ export const adminService = {
         success: false,
         error: error.code,
         message: 'Kullanıcı istatistikleri alınırken hata oluştu.'
+      };
+    }
+  },
+
+  // Migration function: Update all users' packageInfo with packageType from their assigned packages
+  migrateUserPackageTypes: async () => {
+    try {
+      console.log('🔄 Starting migration: Adding packageType to users...');
+
+      // Get all users
+      const usersQuery = query(collection(db, 'users'));
+      const usersSnapshot = await getDocs(usersQuery);
+
+      // Get all packages
+      const packagesQuery = query(collection(db, 'packages'));
+      const packagesSnapshot = await getDocs(packagesQuery);
+
+      // Create a map of packageId -> packageType
+      const packageTypeMap = {};
+      packagesSnapshot.forEach((pkgDoc) => {
+        const pkgData = pkgDoc.data();
+        packageTypeMap[pkgDoc.id] = pkgData.packageType || 'group';
+      });
+
+      console.log('📦 Package type map:', packageTypeMap);
+
+      let updatedCount = 0;
+      let skippedCount = 0;
+      const updates = [];
+
+      // Process each user
+      usersSnapshot.forEach((userDoc) => {
+        const userData = userDoc.data();
+
+        // Check if user has packageInfo and a packageId
+        if (userData.packageInfo && userData.packageInfo.packageId) {
+          const packageId = userData.packageInfo.packageId;
+          const packageType = packageTypeMap[packageId];
+
+          // Only update if packageType is missing
+          if (!userData.packageInfo.packageType && packageType) {
+            console.log(`✓ Updating user ${userDoc.id}: package ${packageId} -> ${packageType}`);
+
+            const updatedPackageInfo = {
+              ...userData.packageInfo,
+              packageType: packageType
+            };
+
+            updates.push(
+              setDoc(doc(db, 'users', userDoc.id), {
+                packageInfo: updatedPackageInfo
+              }, { merge: true })
+            );
+
+            updatedCount++;
+          } else {
+            console.log(`⊘ Skipping user ${userDoc.id}: already has packageType or package not found`);
+            skippedCount++;
+          }
+        } else {
+          console.log(`⊘ Skipping user ${userDoc.id}: no package assigned`);
+          skippedCount++;
+        }
+      });
+
+      // Execute all updates
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+
+      console.log('✅ Migration complete!');
+      console.log(`   Updated: ${updatedCount} users`);
+      console.log(`   Skipped: ${skippedCount} users`);
+
+      return {
+        success: true,
+        message: `Migration complete: ${updatedCount} users updated, ${skippedCount} skipped`,
+        updated: updatedCount,
+        skipped: skippedCount
+      };
+    } catch (error) {
+      console.error('❌ Error during migration:', error);
+      return {
+        success: false,
+        error: error.code,
+        message: 'Migration failed: ' + error.message
       };
     }
   }

@@ -19,6 +19,7 @@ export default {
   delete: 'Sil',
   edit: 'Düzenle',
   view: 'Görüntüle',
+  searchMembers: 'Üye ara...',
   
   // Navigation
   navigation: {
@@ -270,7 +271,7 @@ export default {
     
     // Booking Process
     tooLateTitle: 'Rezervasyon Çok Geç',
-    tooLateMessage: 'Bu ders başlamadan 1 saat öncesine kadar rezerve edilebilir.',
+    tooLateMessage: 'Bu ders başlamadan 2 saat öncesine kadar rezerve edilebilir.',
     bookingConfirmTitle: 'Ders Rezervasyonu',
     bookingConfirmMessage: 'dersini rezerve etmek istediğinizden emin misiniz?',
     bookingSuccess: 'Başarılı! 🎉',
@@ -316,9 +317,9 @@ export default {
     
     // Info Section
     infoTitle: 'Rezervasyon Rehberi',
-    infoText: '• Dersler başlamadan 1 saat öncesine kadar rezerve edilebilir\n• Dersler başlamadan 10 saat öncesine kadar iptal edilebilir\n• İlk kez katılacaksanız 15 dakika önceden gelin\n• Gerekli tüm ekipmanlar derste sağlanır\n• Rahat kıyafet giymeyi unutmayın',
-    infoBulletTitle1: 'İptal Politikası',
-    infoBullet1: 'Dersler başlamadan 2 saat öncesine kadar iptal edilebilir',
+    infoText: '• Dersler başlamadan 2 saat öncesine kadar rezerve edilebilir\n• Dersler başlamadan 8 saat öncesine kadar iptal edilebilir\n• İlk kez katılacaksanız 15 dakika önceden gelin\n• Gerekli tüm ekipmanlar derste sağlanır\n• Rahat kıyafet giymeyi unutmayın',
+    infoBulletTitle1: 'Rezervasyon & İptal',
+    infoBullet1: 'Dersler başlamadan 2 saat öncesine kadar rezerve edilir, 8 saat öncesine kadar iptal edilebilir',
     infoBulletTitle2: 'İlk Ziyaret',
     infoBullet2: 'İlk kez katılacaksanız 15 dakika önceden gelin',
     infoBulletTitle3: 'Ekipman',
@@ -393,7 +394,9 @@ export default {
     duration: 'dakika',
     participants: 'kişi',
     cancelConfirm: 'bu dersi iptal etmek istediğinizden emin misiniz?',
-    cancelNote: 'Not: Normalde dersler başlama saatinden 10 saat öncesine kadar iptal edilebilir.',
+    cancelNote: 'Not: Normalde dersler başlama saatinden 8 saat öncesine kadar iptal edilebilir.',
+    cancelTooLateMessage: 'Ders başlamadan 8 saat öncesine kadar iptal edebilirsiniz.',
+    hoursLeftLabel: 'Kalan süre',
     cancelLessonTitle: 'Dersi İptal Et',
     lessons: 'ders',
     general: 'Genel',
@@ -429,7 +432,7 @@ export default {
     cancelConfirmation: 'Bu dersi iptal etmek istediğinizden emin misiniz?',
     confirmCancel: 'Dersi İptal Et',
     cancellationPolicy: 'İptal Politikası',
-    cancellationPolicyText: 'Dersler, başlama saatinden en az 10 saat önce iptal edilmelidir.',
+    cancellationPolicyText: 'Dersler, başlama saatinden en az 8 saat önce iptal edilmelidir.',
     creditRefund: 'Kredi iadesi',
     noCreditRefund: 'Kredi iadesi yok',
     
