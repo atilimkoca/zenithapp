@@ -59,7 +59,7 @@ const InfoRow = ({ icon, label, value, onPress, rightIcon = 'chevron-forward', d
 };
 
 export default function AdminUserDetailScreen({ route, navigation }) {
-  const { t } = useI18n();
+  useI18n();
   const { userId, initialUser } = route.params || {};
   const [user, setUser] = useState(initialUser || null);
   const [loading, setLoading] = useState(!initialUser);
@@ -124,9 +124,12 @@ export default function AdminUserDetailScreen({ route, navigation }) {
     navigation.navigate('AdminUserMembership', {
       userId,
       userName: buildUserName(user),
+      userStatus: user?.status || 'pending',
       packageInfo: user?.packageInfo || null,
       remainingClasses: user?.remainingClasses ?? null,
       lessonCredits: user?.lessonCredits ?? null,
+      packageExpiryDate: user?.packageExpiryDate ?? null,
+      packageStartDate: user?.packageStartDate ?? null,
     });
   };
 

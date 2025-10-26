@@ -46,6 +46,7 @@ const defaultFormValues = {
   classes: '',
   price: '',
   description: '',
+  packageType: 'group',
 };
 
 export default function AdminPackagesScreen({ navigation }) {
@@ -107,6 +108,7 @@ export default function AdminPackagesScreen({ navigation }) {
       classes: String(pkg?.classes ?? pkg?.sessions ?? ''),
       price: pkg?.price != null ? String(pkg.price) : '',
       description: pkg?.description || '',
+      packageType: pkg?.packageType || 'group',
     });
     setFormError('');
     setModalVisible(true);
@@ -154,6 +156,7 @@ export default function AdminPackagesScreen({ navigation }) {
       duration: editingPackage?.duration ?? 1,
       features: Array.isArray(editingPackage?.features) ? editingPackage.features : [],
       isActive: editingPackage?.isActive ?? true,
+      packageType: formValues.packageType || 'group',
     };
 
     try {
@@ -259,6 +262,7 @@ export default function AdminPackagesScreen({ navigation }) {
     const classesLabel = classCount >= 999 ? 'Sınırsız ders' : `${classCount} ders`;
     const durationLabel = `${pkg?.duration ?? 1} ay`;
     const salesCount = getSalesCount(pkg);
+    const packageTypeLabel = pkg?.packageType === 'individual' ? 'Bire Bir Ders' : 'Grup Dersi';
 
     return (
       <View style={styles.packageCard}>
@@ -298,6 +302,10 @@ export default function AdminPackagesScreen({ navigation }) {
           ) : null}
 
           <View style={styles.packageDetails}>
+            <View style={styles.detailRow}>
+              <Ionicons name="layers-outline" size={16} color={colors.white} />
+              <Text style={styles.detailText}>{packageTypeLabel}</Text>
+            </View>
             <View style={styles.detailRow}>
               <Ionicons name="barbell-outline" size={16} color={colors.white} />
               <Text style={styles.detailText}>{classesLabel}</Text>
@@ -475,6 +483,13 @@ const PackageModal = ({
     }));
   };
 
+  const handlePackageTypeChange = (type) => {
+    setFormValues((prev) => ({
+      ...prev,
+      packageType: type,
+    }));
+  };
+
   const classesCount = Number(formValues.classes);
   const hasClasses = Number.isFinite(classesCount) && classesCount > 0;
   const classesPreview = hasClasses
@@ -490,6 +505,7 @@ const PackageModal = ({
         maximumFractionDigits: priceNumber % 1 === 0 ? 0 : 2,
       })}`
     : 'Ücret girin';
+  const packageTypeLabel = formValues.packageType === 'individual' ? 'Bire Bir Ders' : 'Grup Dersi';
   const summarySubtitle = editing
     ? 'Paketinizi güncelleyip tekrar parlatın.'
     : 'Üyeleriniz için çekici bir paket oluşturun.';
@@ -551,6 +567,10 @@ const PackageModal = ({
 
             <View style={styles.modalIntroPills}>
               <View style={styles.modalIntroPill}>
+                <Ionicons name="layers-outline" size={16} color={colors.primary} />
+                <Text style={styles.modalIntroPillText}>{packageTypeLabel}</Text>
+              </View>
+              <View style={styles.modalIntroPill}>
                 <Ionicons name="barbell-outline" size={16} color={colors.primary} />
                 <Text style={styles.modalIntroPillText}>{classesPreview}</Text>
               </View>
@@ -559,6 +579,69 @@ const PackageModal = ({
                 <Text style={styles.modalIntroPillText}>{pricePreview}</Text>
               </View>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.modalCard}>
+          <View style={styles.sectionHeaderWithIcon}>
+            <View style={styles.sectionIconContainer}>
+              <LinearGradient
+                colors={[colors.primary, colors.primaryDark]}
+                style={styles.sectionIconGradient}
+              >
+                <Ionicons name="layers-outline" size={18} color={colors.white} />
+              </LinearGradient>
+            </View>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.modalCardTitle}>Paket Tipi</Text>
+              <Text style={styles.modalCardSubtitle}>
+                Üyelerinizin hangi tip derslere erişeceğini belirleyin.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.chipContainer}>
+            <TouchableOpacity
+              style={[
+                styles.chip,
+                formValues.packageType === 'group' && styles.chipActive,
+              ]}
+              onPress={() => handlePackageTypeChange('group')}
+              disabled={loading}
+            >
+              {formValues.packageType === 'group' && (
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.chipGradient}
+                >
+                  <Text style={styles.chipTextActive}>Grup Dersi Paketi</Text>
+                </LinearGradient>
+              )}
+              {formValues.packageType !== 'group' && (
+                <Text style={styles.chipText}>Grup Dersi Paketi</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.chip,
+                formValues.packageType === 'individual' && styles.chipActive,
+              ]}
+              onPress={() => handlePackageTypeChange('individual')}
+              disabled={loading}
+            >
+              {formValues.packageType === 'individual' && (
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.chipGradient}
+                >
+                  <Text style={styles.chipTextActive}>Bire Bir Ders Paketi</Text>
+                </LinearGradient>
+              )}
+              {formValues.packageType !== 'individual' && (
+                <Text style={styles.chipText}>Bire Bir Ders Paketi</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1019,6 +1102,58 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
     fontWeight: '600',
+    color: colors.white,
+  },
+  sectionHeaderWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  sectionIconContainer: {
+    marginRight: 12,
+  },
+  sectionIconGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeaderText: {
+    flex: 1,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.transparentGreen,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+    minHeight: 44,
+  },
+  chipActive: {
+    borderColor: colors.primary,
+  },
+  chipGradient: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  chipTextActive: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.white,
   },
 });

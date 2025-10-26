@@ -16,12 +16,14 @@ import { colors } from '../constants/colors';
 import { logoutUser } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
 export default function PendingApprovalScreen() {
   const { user, setUserData, setApprovalStatus } = useAuth();
   const { t } = useI18n();
+  const navigation = useNavigation();
   const [pulseAnim] = useState(new Animated.Value(1));
   const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -72,6 +74,14 @@ export default function PendingApprovalScreen() {
         }
       ]
     );
+  };
+
+  const handleNavigateTerms = () => {
+    navigation.navigate('Terms');
+  };
+
+  const handleNavigatePrivacy = () => {
+    navigation.navigate('Privacy');
   };
 
   return (
@@ -173,6 +183,25 @@ export default function PendingApprovalScreen() {
               <TouchableOpacity onPress={handleLogout} style={styles.logoutLink}>
                 <Text style={styles.logoutText}>{t('pendingApproval.logout')}</Text>
               </TouchableOpacity>
+
+              <Text style={styles.legalTitle}>{t('pendingApproval.legalTitle')}</Text>
+              <View style={styles.legalLinks}>
+                <TouchableOpacity
+                  style={styles.legalLinkWrapper}
+                  onPress={handleNavigateTerms}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.legalLinkText}>{t('auth.termsOfService')}</Text>
+                </TouchableOpacity>
+                <View style={styles.legalDivider} />
+                <TouchableOpacity
+                  style={styles.legalLinkWrapper}
+                  onPress={handleNavigatePrivacy}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.legalLinkText}>{t('auth.privacyPolicy')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             
           </Animated.View>
@@ -367,6 +396,36 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     color: colors.textSecondary,
+    textDecorationLine: 'underline',
+  },
+  legalTitle: {
+    marginTop: 28,
+    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  legalLinkWrapper: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  legalDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(107, 114, 128, 0.3)',
+  },
+  legalLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
     textDecorationLine: 'underline',
   },
 });

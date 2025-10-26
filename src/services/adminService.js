@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 // Admin service for managing user approvals
@@ -70,10 +70,17 @@ export const adminService = {
         // Extract lesson count - try multiple field names for compatibility
         const lessonCount = packageData.lessonCount || packageData.lessons || packageData.classes || 0;
 
+        // Set both root-level and packageInfo fields for consistency
+        updateData.packageExpiryDate = expiryDate.toISOString();
+        updateData.packageStartDate = now.toISOString();
         updateData.packageInfo = {
           packageId: packageData.id,
           packageName: packageData.name || 'Bilinmeyen Paket',
-          packageType: packageData.packageType || 'group', // Include package type
+          packageType:
+            packageData.packageType ||
+            packageData.type ||
+            packageData.category ||
+            (packageData.isOneOnOne ? 'one-on-one' : 'group'), // Include package type
           lessonCount: lessonCount,
           assignedAt: now.toISOString(),
           expiryDate: expiryDate.toISOString()
@@ -82,6 +89,8 @@ export const adminService = {
         updateData.lessonCredits = lessonCount;
       } else {
         // Set expiry date even without package
+        updateData.packageExpiryDate = expiryDate.toISOString();
+        updateData.packageStartDate = now.toISOString();
         updateData.packageInfo = {
           packageId: null,
           packageName: 'Paket Atanmadı',
@@ -153,7 +162,11 @@ export const adminService = {
         packageInfo: {
           packageId: packageData.id,
           packageName: packageData.name || 'Bilinmeyen Paket',
-          packageType: packageData.packageType || 'group', // Include package type
+          packageType:
+            packageData.packageType ||
+            packageData.type ||
+            packageData.category ||
+            (packageData.isOneOnOne ? 'one-on-one' : 'group'), // Include package type
           lessonCount: lessonCount,
           assignedAt: now.toISOString(),
           expiryDate: expiryDate.toISOString(),
@@ -516,6 +529,290 @@ export const adminService = {
         success: false,
         error: error.code,
         message: 'Migration failed: ' + error.message
+      };
+    }
+  },
+
+  // Renew package for a user
+  renewPackage: async (userId, packageId) => {
+    try {
+      console.log(`🔄 Renewing package ${packageId} for user ${userId}`);
+
+      // Get the package details
+      const packageRef = doc(db, 'packages', packageId);
+      const packageDoc = await getDoc(packageRef);
+
+      if (!packageDoc.exists()) {
+        return {
+          success: false,
+          error: 'Paket bulunamadı'
+        };
+      }
+
+      const packageData = packageDoc.data();
+      const packageName = packageData.name || 'Standart Paket';
+      const lessonCount = packageData.classes || packageData.lessonCount || packageData.lessons || 8;
+      const packageType =
+        packageData.packageType ||
+        packageData.type ||
+        packageData.category ||
+        (packageData.isOneOnOne ? 'one-on-one' : 'group');
+      const price = packageData.price || 0;
+      const durationMonths = packageData.duration || 1; // duration in months
+
+      // Get user data
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        return {
+          success: false,
+          error: 'Kullanıcı bulunamadı'
+        };
+      }
+
+      // Calculate renewal dates
+      const renewalDate = new Date();
+      const expiryDate = new Date(renewalDate);
+      // Convert months to days (1 month = ~30 days)
+      expiryDate.setDate(expiryDate.getDate() + (durationMonths * 30));
+
+      // Update user with new package
+      const updateData = {
+        remainingClasses: lessonCount,
+        lessonCredits: lessonCount,
+        membershipStatus: 'active',
+        // Store dates at root level for backward compatibility
+        packageExpiryDate: expiryDate.toISOString(),
+        packageStartDate: renewalDate.toISOString(),
+        packageInfo: {
+          packageId: packageId,
+          packageName: packageName,
+          packageType: packageType,
+          lessonCount: lessonCount,
+          remainingClasses: lessonCount,
+          price: price,
+          assignedAt: renewalDate.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          duration: durationMonths // Store duration in months
+        },
+        lastRenewal: renewalDate.toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(userRef, updateData);
+
+      console.log(`✅ Package renewed successfully for user ${userId}`);
+
+      return {
+        success: true,
+        message: 'Paket başarıyla yenilendi',
+        data: {
+          packageName,
+          lessonCount,
+          expiryDate: expiryDate.toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error renewing package:', error);
+      return {
+        success: false,
+        error: 'Paket yenilenirken hata oluştu: ' + error.message
+      };
+    }
+  },
+
+  // Get all packages
+  getPackages: async () => {
+    try {
+      const q = query(collection(db, 'packages'));
+      const querySnapshot = await getDocs(q);
+      const packages = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        packages.push({
+          id: doc.id,
+          ...data
+        });
+      });
+
+      return {
+        success: true,
+        packages
+      };
+    } catch (error) {
+      console.error('Error getting packages:', error);
+      return {
+        success: false,
+        error: error.message,
+        packages: []
+      };
+    }
+  },
+
+  // Approve user with package and start date
+  approveUserWithPackage: async (userId, packageId, startDateISO) => {
+    try {
+      console.log(`✅ Approving user ${userId} with package ${packageId}, start date: ${startDateISO}`);
+
+      // Get the package details
+      const packageRef = doc(db, 'packages', packageId);
+      const packageDoc = await getDoc(packageRef);
+
+      if (!packageDoc.exists()) {
+        return {
+          success: false,
+          error: 'Paket bulunamadı'
+        };
+      }
+
+      const packageData = packageDoc.data();
+      const packageName = packageData.name || 'Standart Paket';
+      const lessonCount = packageData.classes || packageData.lessonCount || packageData.lessons || 8;
+      const packageType =
+        packageData.packageType ||
+        packageData.type ||
+        packageData.category ||
+        (packageData.isOneOnOne ? 'one-on-one' : 'group');
+      const price = packageData.price || 0;
+      const durationMonths = packageData.duration || 1;
+
+      // Get user data
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        return {
+          success: false,
+          error: 'Kullanıcı bulunamadı'
+        };
+      }
+
+      // Calculate dates
+      const startDate = new Date(startDateISO);
+      const expiryDate = new Date(startDate);
+      expiryDate.setDate(expiryDate.getDate() + (durationMonths * 30));
+
+      // Update user with package and approve
+      const updateData = {
+        status: 'approved',
+        isActive: true,
+        membershipStatus: 'active',
+        approvedAt: new Date().toISOString(),
+        remainingClasses: lessonCount,
+        lessonCredits: lessonCount,
+        packageExpiryDate: expiryDate.toISOString(),
+        packageStartDate: startDate.toISOString(),
+        packageInfo: {
+          packageId: packageId,
+          packageName: packageName,
+          packageType: packageType,
+          lessonCount: lessonCount,
+          remainingClasses: lessonCount,
+          price: price,
+          assignedAt: startDate.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          duration: durationMonths
+        },
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(userRef, updateData);
+
+      console.log(`✅ User approved successfully with package`);
+
+      return {
+        success: true,
+        message: 'Üye başarıyla onaylandı'
+      };
+    } catch (error) {
+      console.error('❌ Error approving user:', error);
+      return {
+        success: false,
+        error: 'Üye onaylanırken hata oluştu: ' + error.message
+      };
+    }
+  },
+
+  // Renew package with custom start date
+  renewPackageWithStartDate: async (userId, packageId, startDateISO) => {
+    try {
+      console.log(`🔄 Renewing package ${packageId} for user ${userId}, start date: ${startDateISO}`);
+
+      // Get the package details
+      const packageRef = doc(db, 'packages', packageId);
+      const packageDoc = await getDoc(packageRef);
+
+      if (!packageDoc.exists()) {
+        return {
+          success: false,
+          error: 'Paket bulunamadı'
+        };
+      }
+
+      const packageData = packageDoc.data();
+      const packageName = packageData.name || 'Standart Paket';
+      const lessonCount = packageData.classes || packageData.lessonCount || packageData.lessons || 8;
+      const packageType =
+        packageData.packageType ||
+        packageData.type ||
+        packageData.category ||
+        (packageData.isOneOnOne ? 'one-on-one' : 'group');
+      const price = packageData.price || 0;
+      const durationMonths = packageData.duration || 1;
+
+      // Get user data
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        return {
+          success: false,
+          error: 'Kullanıcı bulunamadı'
+        };
+      }
+
+      // Calculate dates
+      const startDate = new Date(startDateISO);
+      const expiryDate = new Date(startDate);
+      expiryDate.setDate(expiryDate.getDate() + (durationMonths * 30));
+
+      // Update user with new package
+      const updateData = {
+        remainingClasses: lessonCount,
+        lessonCredits: lessonCount,
+        membershipStatus: 'active',
+        packageExpiryDate: expiryDate.toISOString(),
+        packageStartDate: startDate.toISOString(),
+        packageInfo: {
+          packageId: packageId,
+          packageName: packageName,
+          packageType: packageType,
+          lessonCount: lessonCount,
+          remainingClasses: lessonCount,
+          price: price,
+          assignedAt: startDate.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          duration: durationMonths
+        },
+        lastRenewal: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(userRef, updateData);
+
+      console.log(`✅ Package renewed successfully`);
+
+      return {
+        success: true,
+        message: 'Paket başarıyla yenilendi'
+      };
+    } catch (error) {
+      console.error('❌ Error renewing package:', error);
+      return {
+        success: false,
+        error: 'Paket yenilenirken hata oluştu: ' + error.message
       };
     }
   }

@@ -6,6 +6,8 @@ import { View, ActivityIndicator, Text } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import PendingApprovalScreen from './src/screens/PendingApprovalScreen';
+import TermsScreen from './src/screens/TermsScreen';
+import PrivacyScreen from './src/screens/PrivacyScreen';
 import NotificationScreen from './src/screens/NotificationScreen';
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminUserManagementScreen from './src/screens/admin/AdminUserManagementScreen';
@@ -241,6 +243,14 @@ function Navigation() {
           />
         </>
       )}
+      <Stack.Screen
+        name="Terms"
+        component={TermsScreen}
+      />
+      <Stack.Screen
+        name="Privacy"
+        component={PrivacyScreen}
+      />
     </Stack.Navigator>
   );
 }

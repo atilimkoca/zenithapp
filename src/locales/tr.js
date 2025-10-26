@@ -65,6 +65,7 @@ export default {
     lastNamePlaceholder: 'Soyadınız',
     phoneNumberPlaceholder: 'Telefon Numaranız',
     phonePlaceholder: '+90 555 123 45 67',
+    selectCountry: 'Ülke kodu seçin',
     createPasswordPlaceholder: 'Şifrenizi oluşturun',
     confirmPasswordPlaceholder: 'Şifrenizi tekrar girin',
     registerButton: 'Kayıt Ol',
@@ -75,10 +76,12 @@ export default {
     termsAndConditions: 'Kullanım Koşulları\'nı kabul ediyorum',
     agreeToTerms: '',
     termsOfService: 'Kullanım Koşulları',
-    and: ' ve ',
     privacyPolicy: 'Gizlilik Politikası',
-    agreeText: '\'nı kabul ediyorum',
+    termsAgreementPrefix: '',
+    termsAgreementMiddle: ' ve ',
+    termsAgreementSuffix: '\'nı kabul ediyorum',
     termsAndPrivacyText: 'Kullanım Koşulları ve Gizlilik Politikası\'nı kabul ediyorum',
+    legalTitle: 'Yasal Bilgiler',
     createAccountButton: 'Hesap Oluştur',
     creatingAccount: 'Hesap Oluşturuluyor...',
     
@@ -411,6 +414,7 @@ export default {
     membershipCancelled: 'Üyeliğiniz iptal edilmiş. Ders rezervasyonu yapamazsınız. Yeni üyelik için lütfen yönetici ile iletişime geçin.',
     membershipFrozen: 'Üyeliğiniz dondurulmuş durumda. Ders rezervasyonu yapamazsınız. Lütfen yönetici ile iletişime geçin.',
     membershipInactive: 'Üyeliğiniz aktif değil. Lütfen üyeliğinizi yenilemek için yönetici ile iletişime geçin.',
+    membershipNotStarted: 'Üyeliğiniz henüz başlamadı. Ders rezervasyonu yapmak için başlangıç tarihinizi bekleyin.',
     insufficientCredits: 'Yetersiz ders kredisi. Lütfen ders paketi satın alın.',
   },
   
@@ -607,6 +611,23 @@ export default {
   },
   
   // Pending Approval Screen
+  legal: {
+    termsTitle: 'Kullanım Koşulları',
+    termsSubtitle: 'Zénith Studio hizmetlerini kullanırken lütfen okuyun',
+    termsIntro: 'Bir hesap oluşturarak Zénith Studio uygulama ve hizmetlerini sorumlu bir şekilde kullanmayı kabul etmiş olursunuz.',
+    termsUsage: 'Paylaştığınız bilgilerin doğruluğundan ve giriş bilgilerinizin güvenliğinden siz sorumlusunuz.',
+    termsBookings: 'Ders rezervasyonları, mobil ve web uygulamalarında belirtilen stüdyo kuralları doğrultusunda oluşturulabilir, değiştirilebilir veya iptal edilebilir.',
+    termsPayments: 'Ödemeler ve paket yenilemeleri stüdyo tarafından bildirilen yöntemlerle alınır. Ücretler önceden haber verilerek güncellenebilir.',
+    privacyTitle: 'Gizlilik Politikası',
+    privacySubtitle: 'Bilgilerinizi nasıl topluyor ve koruyoruz',
+    privacyIntro: 'Stüdyo deneyimini sunabilmek için temel profil bilgilerinizi ve kullanım verilerinizi topluyoruz.',
+    privacyData: 'Kayıtlı bilgileriniz adınız, iletişim bilgileriniz, ders geçmişiniz ve paket tercihlerinizi içerebilir.',
+    privacyUsage: 'Bu bilgiler derslerin sağlanması, üyeliklerin yönetilmesi ve önemli duyurular için kullanılır.',
+    privacySecurity: 'Bilgilerinizi asla üçüncü taraflara satmıyor, sektörde kabul gören güvenlik önlemlerini uyguluyoruz.',
+    privacyRights: 'Verilerinizin güncellenmesini veya silinmesini stüdyo ekibiyle iletişime geçerek talep edebilirsiniz.',
+    contactNote: 'Sorularınız için info@zenithstudio.com adresinden bize ulaşabilirsiniz.',
+  },
+
   pendingApproval: {
     title: 'Onay Bekleniyor',
     studioName: 'Zénith Studio',
@@ -622,6 +643,7 @@ export default {
     awaitingApproval: 'Onay Bekleniyor',
     appAccess: 'Uygulama Erişimi',
     supportMessage: 'Sorularınız için 7/24 destek hattımızdan bize ulaşabilirsiniz',
+    legalTitle: 'Yasal Bilgiler',
     logoutPrompt: 'Çıkış Yap',
     logoutConfirm: 'Çıkış yapmak istediğinizden emin misiniz? Onay durumunuzu daha sonra kontrol edebilirsiniz.',
     cancel: 'İptal',

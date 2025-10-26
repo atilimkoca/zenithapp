@@ -56,7 +56,6 @@ export default function AdminLessonManagementScreen({ navigation }) {
   const [lessons, setLessons] = useState([]);
   const [filteredLessons, setFilteredLessons] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('upcoming');
   const [selectedDateKey, setSelectedDateKey] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -105,14 +104,23 @@ export default function AdminLessonManagementScreen({ navigation }) {
 
   useEffect(() => {
     filterLessons();
-  }, [lessons, searchTerm, filterStatus, selectedDateKey]);
+  }, [lessons, searchTerm, selectedDateKey]);
 
   const availableDateKeys = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const uniqueKeys = new Set();
     lessons.forEach(lesson => {
       const key = formatDateKey(lesson.scheduledDate);
       if (key) {
-        uniqueKeys.add(key);
+        // Only include dates from today onwards
+        const lessonDate = new Date(lesson.scheduledDate);
+        lessonDate.setHours(0, 0, 0, 0);
+        
+        if (lessonDate >= today) {
+          uniqueKeys.add(key);
+        }
       }
     });
     return Array.from(uniqueKeys).sort();
@@ -126,10 +134,13 @@ export default function AdminLessonManagementScreen({ navigation }) {
       return;
     }
 
-    if (selectedDateKey && !availableDateKeys.includes(selectedDateKey)) {
-      setSelectedDateKey(availableDateKeys[0]);
-    }
-  }, [availableDateKeys, selectedDateKey]);
+    setSelectedDateKey(prev => {
+      if (prev && availableDateKeys.includes(prev)) {
+        return prev;
+      }
+      return availableDateKeys[0];
+    });
+  }, [availableDateKeys]);
 
   // Reload lessons when screen comes back into focus (after editing/creating)
   useEffect(() => {
@@ -165,44 +176,17 @@ export default function AdminLessonManagementScreen({ navigation }) {
         lesson.trainerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lesson.type?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const lessonDate = new Date(lesson.scheduledDate);
-      const now = new Date();
-      const isPast = lessonDate < now;
-
-      let matchesStatus = true;
-      if (filterStatus === 'upcoming') {
-        // Only show future lessons that are not cancelled
-        matchesStatus = lessonDate > now && lesson.status !== 'cancelled';
-      } else if (filterStatus === 'completed') {
-        // Show all past lessons (completed, scheduled, or no status) but not cancelled
-        matchesStatus = isPast && lesson.status !== 'cancelled';
-      } else if (filterStatus === 'cancelled') {
-        // Show only cancelled lessons
-        matchesStatus = lesson.status === 'cancelled';
-      }
-
       const lessonDateKey = formatDateKey(lesson.scheduledDate);
       const matchesDate = !selectedDateKey || lessonDateKey === selectedDateKey;
 
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch && matchesDate;
     });
 
-    // Sort lessons by date - nearest first
+    // Sort lessons by date - earliest first
     filtered.sort((a, b) => {
       const dateA = new Date(a.scheduledDate);
       const dateB = new Date(b.scheduledDate);
-      const now = new Date();
-      
-      if (filterStatus === 'upcoming') {
-        // For upcoming lessons: earliest first (ascending order)
-        return dateA - dateB;
-      } else if (filterStatus === 'completed') {
-        // For past lessons: most recent first (descending order)
-        return dateB - dateA;
-      } else {
-        // For cancelled: most recent first
-        return dateB - dateA;
-      }
+      return dateA - dateB;
     });
 
     setFilteredLessons(filtered);
@@ -329,106 +313,176 @@ export default function AdminLessonManagementScreen({ navigation }) {
     return 'Yaklaşan';
   };
 
-  const LessonCard = ({ lesson }) => (
-    <TouchableOpacity 
-      style={styles.lessonCard}
-      onPress={() => showLessonDetails(lesson)}
-    >
-      <View style={styles.lessonHeader}>
-        <View style={styles.lessonInfo}>
-          <Text style={styles.lessonTitle}>{lesson.title}</Text>
-          <Text style={styles.lessonTrainer}>Eğitmen: {lesson.trainerName}</Text>
-          <Text style={styles.lessonType}>{lesson.type}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(lesson) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(lesson) }]}>
-            {getStatusText(lesson)}
-          </Text>
-        </View>
-      </View>
+  const LessonCard = ({ lesson }) => {
+    const participantCount = lesson.currentParticipants || lesson.participants?.length || lesson.enrolledStudents?.length || 0;
+    const maxCapacity = lesson.maxStudents || lesson.maxParticipants || 0;
+    const capacityPercentage = maxCapacity > 0 ? (participantCount / maxCapacity) * 100 : 0;
+    
+    return (
+      <TouchableOpacity 
+        style={styles.lessonCard}
+        onPress={() => showLessonDetails(lesson)}
+        activeOpacity={0.95}
+      >
+        <LinearGradient
+          colors={[getStatusColor(lesson) + '08', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.lessonCardGradient}
+        >
+          {/* Status Indicator Strip */}
+          <View style={[styles.statusStrip, { backgroundColor: getStatusColor(lesson) }]} />
+          
+          <View style={styles.lessonCardContent}>
+            {/* Header Section */}
+            <View style={styles.lessonHeader}>
+              <View style={styles.lessonIconWrapper}>
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.lessonIconGradient}
+                >
+                  <Ionicons name="barbell" size={22} color={colors.white} />
+                </LinearGradient>
+              </View>
+              
+              <View style={styles.lessonInfo}>
+                <Text style={styles.lessonTitle} numberOfLines={1}>
+                  {lesson.title}
+                </Text>
+                <View style={styles.lessonMeta}>
+                  <Ionicons name="person" size={13} color={colors.textSecondary} />
+                  <Text style={styles.lessonTrainer} numberOfLines={1}>
+                    {lesson.trainerName}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(lesson) }]}>
+                <Text style={styles.statusText}>
+                  {getStatusText(lesson)}
+                </Text>
+              </View>
+            </View>
 
-      <View style={styles.lessonDetails}>
-        <View style={styles.lessonDateTime}>
-          <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.lessonDate}>
-            {new Date(lesson.scheduledDate).toLocaleDateString('tr-TR')}
-          </Text>
-          <Ionicons name="time-outline" size={16} color={colors.textSecondary} style={{ marginLeft: 12 }} />
-          <Text style={styles.lessonTime}>
-            {lesson.startTime || new Date(lesson.scheduledDate).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          {lesson.duration && (
-            <>
-              <Ionicons name="hourglass-outline" size={16} color={colors.textSecondary} style={{ marginLeft: 12 }} />
-              <Text style={styles.lessonTime}>
-                {lesson.duration} dk
-              </Text>
-            </>
-          )}
-        </View>
+            {/* Type Badge */}
+            <View style={styles.lessonTypeContainer}>
+              <View style={styles.lessonTypeBadge}>
+                <Ionicons name="fitness-outline" size={12} color={colors.primary} />
+                <Text style={styles.lessonType}>{lesson.type}</Text>
+              </View>
+              {lesson.lessonType && (
+                <View style={[
+                  styles.lessonTypeBadge,
+                  lesson.lessonType === 'one-on-one' && styles.lessonTypeBadgeOneOnOne
+                ]}>
+                  <Text style={[
+                    styles.lessonType,
+                    lesson.lessonType === 'one-on-one' && styles.lessonTypeOneOnOne
+                  ]}>
+                    {lesson.lessonType === 'one-on-one' ? '👤 Bire Bir' : '👥 Grup'}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-        <View style={styles.lessonCapacity}>
-          <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.capacityText}>
-            {lesson.currentParticipants || lesson.participants?.length || lesson.enrolledStudents?.length || 0} / {lesson.maxStudents || lesson.maxParticipants || 0} kişi
-          </Text>
-        </View>
-      </View>
+            {/* Details Grid */}
+            <View style={styles.lessonDetailsGrid}>
+              <View style={styles.detailGridItem}>
+                <Ionicons name="calendar" size={15} color={colors.primary} />
+                <Text style={styles.detailValue}>
+                  {new Date(lesson.scheduledDate).toLocaleDateString('tr-TR', {
+                    day: 'numeric',
+                    month: 'short'
+                  })}
+                </Text>
+              </View>
 
-      {(() => {
-        const lessonDate = new Date(lesson.scheduledDate);
-        const now = new Date();
-        const isPast = lessonDate < now;
-        
-        // Don't show buttons for past lessons or cancelled/completed lessons
-        if (isPast || lesson.status === 'cancelled' || lesson.status === 'completed') {
-          return null;
-        }
-        
-        return (
-          <View style={styles.lessonActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
-              onPress={(e) => {
-                e.stopPropagation();
-                navigation.navigate('EditLesson', { lesson });
-              }}
-            >
-              <Ionicons name="create-outline" size={18} color={colors.white} />
-              <Text style={styles.actionButtonText}>Düzenle</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleCancelLesson(lesson.id, lesson.title);
-              }}
-            >
-              <Ionicons name="close-circle-outline" size={18} color={colors.white} />
-              <Text style={styles.actionButtonText}>İptal Et</Text>
-            </TouchableOpacity>
+              <View style={styles.detailGridItem}>
+                <Ionicons name="time" size={15} color={colors.primary} />
+                <Text style={styles.detailValue}>
+                  {lesson.startTime || new Date(lesson.scheduledDate).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+
+              {lesson.duration && (
+                <View style={styles.detailGridItem}>
+                  <Ionicons name="hourglass" size={15} color={colors.primary} />
+                  <Text style={styles.detailValue}>{lesson.duration}dk</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Capacity Progress */}
+            <View style={styles.capacitySection}>
+              <View style={styles.capacityHeader}>
+                <View style={styles.capacityLabelContainer}>
+                  <Ionicons name="people" size={16} color={colors.textPrimary} />
+                  <Text style={styles.capacityLabel}>Katılımcılar</Text>
+                </View>
+                <Text style={styles.capacityCount}>
+                  {participantCount}/{maxCapacity}
+                </Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <LinearGradient
+                    colors={
+                      capacityPercentage >= 100 
+                        ? [colors.error, colors.error] 
+                        : capacityPercentage >= 80 
+                          ? [colors.warning, colors.warning]
+                          : [colors.success, colors.primary]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.progressBarFill, { width: `${Math.min(capacityPercentage, 100)}%` }]}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            {(() => {
+              const lessonDate = new Date(lesson.scheduledDate);
+              const now = new Date();
+              const isPast = lessonDate < now;
+              
+              if (isPast || lesson.status === 'cancelled' || lesson.status === 'completed') {
+                return null;
+              }
+              
+              return (
+                <View style={styles.lessonActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.editButton]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      navigation.navigate('EditLesson', { lesson });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="create-outline" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>Düzenle</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleCancelLesson(lesson.id, lesson.title);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color={colors.white} />
+                    <Text style={styles.actionButtonText}>İptal Et</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
           </View>
-        );
-      })()}
-    </TouchableOpacity>
-  );
-
-  const FilterButton = ({ status, label }) => (
-    <TouchableOpacity
-      style={[
-        styles.filterButton,
-        filterStatus === status && styles.activeFilterButton
-      ]}
-      onPress={() => setFilterStatus(status)}
-    >
-      <Text style={[
-        styles.filterButtonText,
-        filterStatus === status && styles.activeFilterButtonText
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -436,8 +490,6 @@ export default function AdminLessonManagementScreen({ navigation }) {
         <UniqueHeader
           title="Ders Yönetimi"
           subtitle="Tüm dersler"
-          leftIcon="arrow-back"
-          onLeftPress={() => navigation.goBack()}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -447,67 +499,50 @@ export default function AdminLessonManagementScreen({ navigation }) {
     );
   }
 
-  const upcomingCount = lessons.filter(l => new Date(l.scheduledDate) > new Date() && l.status !== 'cancelled').length;
-  const pastCount = lessons.filter(l => {
+  const upcomingCount = lessons.filter(l => {
     const lessonDate = new Date(l.scheduledDate);
-    if (l.startTime) {
-      const [hours, minutes] = l.startTime.split(':').map(Number);
-      lessonDate.setHours(hours, minutes, 0, 0);
-    }
-    return lessonDate < new Date() && l.status !== 'cancelled';
+    lessonDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return lessonDate >= today && l.status !== 'cancelled';
   }).length;
-  const cancelledCount = lessons.filter(l => l.status === 'cancelled').length;
 
   return (
     <View style={styles.container}>
       <UniqueHeader
         title="Ders Yönetimi"
-        subtitle={`${lessons.length} ders`}
-        leftIcon="arrow-back"
-        onLeftPress={() => navigation.goBack()}
+        subtitle={`${upcomingCount} yaklaşan ders`}
         onRightPress={() => navigation.navigate('Notifications')}
-        showStats={true}
-        stats={[
-          { value: upcomingCount.toString(), label: 'Yaklaşan', icon: 'calendar-outline', color: 'rgba(255, 255, 255, 0.3)' },
-          { value: pastCount.toString(), label: 'Geçmiş Dersler', icon: 'checkmark-circle-outline', color: 'rgba(255, 255, 255, 0.3)' },
-        ]}
       />
 
       <View style={styles.content}>
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Ders ara..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholderTextColor={colors.textSecondary}
-          />
-          {searchTerm.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchTerm('')}>
-              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
+        {/* Modern Search Bar */}
+        <View style={styles.searchWrapper}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Ders ara..."
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholderTextColor={colors.textSecondary}
+            />
+            {searchTerm.length > 0 && (
+              <TouchableOpacity 
+                onPress={() => setSearchTerm('')}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-
-        {/* Filter Buttons */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.filterContainer}
-        >
-          <FilterButton status="upcoming" label="Yaklaşan" />
-          <FilterButton status="completed" label="Geçmiş Dersler" />
-          <FilterButton status="cancelled" label="İptal Edilen" />
-        </ScrollView>
 
         <DateCarouselPicker
           dates={availableDateKeys}
           selectedDate={selectedDateKey}
           onSelectDate={setSelectedDateKey}
-          allowClear
-          allLabel="Tümü"
         />
 
         {/* Lessons List */}
@@ -520,11 +555,37 @@ export default function AdminLessonManagementScreen({ navigation }) {
         >
           {filteredLessons.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />
+              <View style={styles.emptyIconContainer}>
+                <LinearGradient
+                  colors={[colors.primary + '20', colors.primary + '05']}
+                  style={styles.emptyIconGradient}
+                >
+                  <Ionicons name="calendar-outline" size={64} color={colors.primary} />
+                </LinearGradient>
+              </View>
               <Text style={styles.emptyTitle}>Ders bulunamadı</Text>
               <Text style={styles.emptyText}>
-                {searchTerm ? 'Arama kriterlerinize uygun ders bulunamadı.' : 'Henüz ders bulunmuyor.'}
+                {searchTerm 
+                  ? 'Arama kriterlerinize uygun ders bulunamadı.' 
+                  : selectedDateKey
+                    ? 'Bu tarih için ders bulunmuyor.'
+                    : 'Henüz ders bulunmuyor.'}
               </Text>
+              {!searchTerm && (
+                <TouchableOpacity
+                  style={styles.emptyActionButton}
+                  onPress={() => navigation.navigate('CreateLesson')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.primaryDark]}
+                    style={styles.emptyActionButtonGradient}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={colors.white} />
+                    <Text style={styles.emptyActionButtonText}>Yeni Ders Oluştur</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             filteredLessons.map((lesson) => (
@@ -534,12 +595,18 @@ export default function AdminLessonManagementScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {/* Floating Add Button */}
+      {/* Modern Floating Add Button */}
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => navigation.navigate('CreateLesson')}
+        activeOpacity={0.9}
       >
-        <Ionicons name="add" size={28} color={colors.white} />
+        <LinearGradient
+          colors={[colors.success, colors.primary]}
+          style={styles.floatingButtonGradient}
+        >
+          <Ionicons name="add" size={28} color={colors.white} />
+        </LinearGradient>
       </TouchableOpacity>
 
   {/* Lesson Details Modal */}
@@ -665,6 +732,27 @@ export default function AdminLessonManagementScreen({ navigation }) {
                             <Text style={styles.detailItemValue}>{selectedLesson.type || 'Belirtilmemiş'}</Text>
                           </View>
                         </View>
+
+                        {selectedLesson.lessonType && (
+                          <View style={styles.detailItem}>
+                            <View style={styles.detailIconContainer}>
+                              <Ionicons 
+                                name={selectedLesson.lessonType === 'one-on-one' ? 'person-outline' : 'people-outline'} 
+                                size={22} 
+                                color={selectedLesson.lessonType === 'one-on-one' ? '#8b5cf6' : colors.primary} 
+                              />
+                            </View>
+                            <View style={styles.detailTextContainer}>
+                              <Text style={styles.detailItemLabel}>Ders Tipi</Text>
+                              <Text style={[
+                                styles.detailItemValue,
+                                selectedLesson.lessonType === 'one-on-one' && { color: '#8b5cf6', fontWeight: '700' }
+                              ]}>
+                                {selectedLesson.lessonType === 'one-on-one' ? '👤 Bire Bir Ders' : '👥 Grup Dersi'}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
 
                         <View style={styles.detailItem}>
                           <View style={styles.detailIconContainer}>
@@ -859,141 +947,252 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // Search
+  // Modern Search
+  searchWrapper: {
+    marginTop: 12,
+    marginBottom: 16,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 12,
-    marginBottom: 12,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     ...colors.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(107, 127, 106, 0.08)',
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textPrimary,
-  },
-
-  // Filters
-  filterContainer: {
-    marginBottom: 12,
-    maxHeight: 32,
-  },
-  filterButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  activeFilterButton: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterButtonText: {
-    fontSize: 13,
-    color: colors.textSecondary,
     fontWeight: '500',
-    lineHeight: 18,
   },
-  activeFilterButtonText: {
-    color: colors.white,
+  clearButton: {
+    padding: 4,
   },
 
-  // Lessons List
+  // Modern Lessons List
   lessonsList: {
     flex: 1,
   },
   lessonCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
     ...colors.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  lessonCardGradient: {
+    borderRadius: 20,
+    backgroundColor: colors.white,
+  },
+  statusStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
+  },
+  lessonCardContent: {
+    padding: 18,
+    paddingLeft: 22,
   },
   lessonHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  lessonIconWrapper: {
+    marginRight: 14,
+  },
+  lessonIconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...colors.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   lessonInfo: {
     flex: 1,
+    marginRight: 12,
   },
   lessonTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 3,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  lessonMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   lessonTrainer: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginBottom: 1,
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.white,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  lessonTypeContainer: {
+    marginBottom: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  lessonTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary + '12',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  lessonTypeBadgeOneOnOne: {
+    backgroundColor: '#8b5cf6' + '15',
   },
   lessonType: {
     fontSize: 12,
     color: colors.primary,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 11,
     fontWeight: '600',
+    marginLeft: 6,
   },
-  lessonDetails: {
-    marginBottom: 8,
+  lessonTypeOneOnOne: {
+    color: '#8b5cf6',
+    marginLeft: 0,
   },
-  lessonDateTime: {
+  lessonDetailsGrid: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  detailGridItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(107, 127, 106, 0.1)',
+    gap: 6,
   },
-  lessonDate: {
-    fontSize: 12,
+  detailIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    ...colors.shadow,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  detailContent: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 10,
     color: colors.textSecondary,
-    marginLeft: 4,
+    marginBottom: 2,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  lessonTime: {
+  detailValue: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginLeft: 4,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
-  lessonCapacity: {
+  capacitySection: {
+    marginBottom: 16,
+  },
+  capacityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  capacityLabelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  capacityText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginLeft: 4,
+  capacityLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginLeft: 6,
+  },
+  capacityCount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  progressBarContainer: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarBackground: {
+    flex: 1,
+    backgroundColor: colors.gray,
+    borderRadius: 4,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   lessonActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    marginTop: 4,
+    gap: 10,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginLeft: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    ...colors.shadow,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   cancelButton: {
     backgroundColor: colors.error,
@@ -1003,33 +1202,67 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    marginLeft: 6,
+    letterSpacing: 0.2,
   },
 
-  // Empty State
+  // Modern Empty State
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  emptyActionButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...colors.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  emptyActionButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  emptyActionButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 8,
+    letterSpacing: 0.2,
+  },
 
-  // Modal
+  // Modal Styles (keeping existing ones)
   modalOverlay: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -1419,24 +1652,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   
-  // Floating Button
+  // Modern Floating Button
   floatingButton: {
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.success,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  floatingButtonGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
   },
 });

@@ -438,7 +438,7 @@ export const lessonService = {
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        
+
         // Check if membership is cancelled
         if (userData.membershipStatus === 'cancelled' || userData.status === 'cancelled') {
           return {
@@ -446,7 +446,7 @@ export const lessonService = {
             messageKey: 'classes.membershipCancelled'
           };
         }
-        
+
         // Check if membership is frozen
         if (userData.membershipStatus === 'frozen' || userData.status === 'frozen') {
           return {
@@ -454,13 +454,31 @@ export const lessonService = {
             messageKey: 'classes.membershipFrozen'
           };
         }
-        
+
         // Check if membership is inactive
         if (userData.membershipStatus === 'inactive' || userData.status === 'inactive') {
           return {
             success: false,
             messageKey: 'classes.membershipInactive'
           };
+        }
+
+        // Prevent booking before membership start date (supports future-dated approvals)
+        if (userData.packageStartDate || userData.packageInfo?.assignedAt) {
+          const startDateValue = userData.packageStartDate || userData.packageInfo?.assignedAt;
+          const startDate = new Date(startDateValue);
+          if (!Number.isNaN(startDate.getTime())) {
+            const normalizedStartDate = new Date(startDate);
+            normalizedStartDate.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (normalizedStartDate > today) {
+              return {
+                success: false,
+                messageKey: 'classes.membershipNotStarted'
+              };
+            }
+          }
         }
       }
       

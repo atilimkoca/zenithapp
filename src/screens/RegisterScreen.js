@@ -5,11 +5,15 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Image,
   Alert,
+  TextInput,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CustomInput, CustomButton } from '../components/UI';
@@ -17,10 +21,20 @@ import { colors } from '../constants/colors';
 import { registerUser } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { Ionicons } from '@expo/vector-icons';
+
+const COUNTRY_OPTIONS = [
+  { code: 'TR', name: 'Türkiye', dialCode: '+90', flag: '🇹🇷', example: '5XX XXX XX XX' },
+  { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸', example: '555 123 4567' },
+  { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧', example: '7712 345678' },
+  { code: 'DE', name: 'Deutschland', dialCode: '+49', flag: '🇩🇪', example: '1512 3456789' },
+  { code: 'FR', name: 'France', dialCode: '+33', flag: '🇫🇷', example: '6 12 34 56 78' },
+];
 
 export default function RegisterScreen({ navigation }) {
   const { t } = useI18n();
   const { setUserData, setApprovalStatus } = useAuth();
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRY_OPTIONS[0]);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -32,10 +46,17 @@ export default function RegisterScreen({ navigation }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [isCountryModalVisible, setCountryModalVisible] = useState(false);
+
+  const handleOpenTerms = () => navigation.navigate('Terms');
+  const handleOpenPrivacy = () => navigation.navigate('Privacy');
 
   const updateFormData = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
+    let processedValue = value;
+    if (field === 'phone') {
+      processedValue = value.replace(/[^0-9]/g, '');
+    }
+    setFormData(prev => ({ ...prev, [field]: processedValue }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
@@ -60,7 +81,7 @@ export default function RegisterScreen({ navigation }) {
     
     if (!formData.phone) {
       newErrors.phone = t('auth.phoneRequired');
-    } else if (!/^[0-9+\-\s()]+$/.test(formData.phone)) {
+    } else if (formData.phone.length < 7) {
       newErrors.phone = t('auth.invalidPhone');
     }
     
@@ -96,7 +117,7 @@ export default function RegisterScreen({ navigation }) {
         {
           firstName: formData.firstName,
           lastName: formData.lastName,
-          phone: formData.phone,
+          phone: `${selectedCountry.dialCode}${formData.phone}`,
         }
       );
       
@@ -197,14 +218,31 @@ export default function RegisterScreen({ navigation }) {
                   error={errors.email}
                 />
                 
-                <CustomInput
-                  label={t('auth.phone')}
-                  value={formData.phone}
-                  onChangeText={(value) => updateFormData('phone', value)}
-                  placeholder={t('auth.phonePlaceholder')}
-                  keyboardType="phone-pad"
-                  error={errors.phone}
-                />
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>{t('auth.phone')}</Text>
+                  <Text style={styles.countryHint}>{selectedCountry.name}</Text>
+                </View>
+                <View style={[styles.phoneInputRow, errors.phone && styles.inputErrorBorder]}>
+                  <TouchableOpacity
+                    style={styles.countrySelector}
+                    onPress={() => setCountryModalVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
+                    <Text style={styles.countryDial}>{selectedCountry.dialCode}</Text>
+                    <Ionicons name="chevron-down" size={16} color={colors.textSecondary} style={styles.countryChevron} />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.phoneTextInput}
+                    value={formData.phone}
+                    onChangeText={(value) => updateFormData('phone', value)}
+                    placeholder={selectedCountry.example || t('auth.phoneNumberPlaceholder')}
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="number-pad"
+                    maxLength={16}
+                  />
+                </View>
+                {errors.phone && <Text style={styles.phoneErrorText}>{errors.phone}</Text>}
                 
                 <CustomInput
                   label={t('auth.password')}
@@ -225,25 +263,33 @@ export default function RegisterScreen({ navigation }) {
                 />
                 
                 {/* Terms and Conditions */}
-                <TouchableOpacity 
-                  style={styles.termsContainer}
-                  onPress={() => setAgreeToTerms(!agreeToTerms)}
-                >
-                  <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
-                    {agreeToTerms && <Text style={styles.checkmark}>✓</Text>}
+                <View style={styles.termsContainer}>
+                  <TouchableOpacity
+                    style={styles.checkboxTouchable}
+                    onPress={() => setAgreeToTerms(!agreeToTerms)}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}>
+                      {agreeToTerms && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.termsTextWrapper}>
+                    <Text style={styles.termsText}>
+                      {t('auth.termsAgreementPrefix')}
+                      <Text style={styles.termsLink} onPress={handleOpenTerms}>
+                        {t('auth.termsOfService')}
+                      </Text>
+                      {t('auth.termsAgreementMiddle')}
+                      <Text style={styles.termsLink} onPress={handleOpenPrivacy}>
+                        {t('auth.privacyPolicy')}
+                      </Text>
+                      {t('auth.termsAgreementSuffix')}
+                    </Text>
                   </View>
-                  <Text style={styles.termsText}>
-                    {t('auth.termsAndPrivacyText') !== 'auth.termsAndPrivacyText' ? 
-                      t('auth.termsAndPrivacyText') :
-                      <>
-                        <Text style={styles.termsLink}>{t('auth.termsOfService')}</Text>{t('auth.and')}
-                        <Text style={styles.termsLink}>{t('auth.privacyPolicy')}</Text>{t('auth.agreeText') || "'nı kabul ediyorum"}
-                      </>
-                    }
-                  </Text>
-                </TouchableOpacity>
+                </View>
                 {errors.terms && <Text style={styles.errorText}>{errors.terms}</Text>}
-                
+
                 <CustomButton
                   title={loading ? t('auth.creatingAccount') : t('auth.createAccountButton')}
                   onPress={handleRegister}
@@ -265,6 +311,55 @@ export default function RegisterScreen({ navigation }) {
               </View>
             </View>
           </ScrollView>
+
+          <Modal
+            visible={isCountryModalVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setCountryModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={() => setCountryModalVisible(false)} >
+                <View style={styles.modalBackdrop} />
+              </TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>{t('auth.selectCountry')}</Text>
+                <FlatList
+                  data={COUNTRY_OPTIONS}
+                  keyExtractor={(item) => item.code}
+                  ItemSeparatorComponent={() => <View style={styles.countryOptionDivider} />}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  renderItem={({ item }) => {
+                    const isSelected = item.code === selectedCountry.code;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.countryOption, isSelected && styles.countryOptionActive]}
+                        onPress={() => {
+                          setSelectedCountry(item);
+                          setCountryModalVisible(false);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.countryOptionFlag}>{item.flag}</Text>
+                        <View style={styles.countryOptionTextWrapper}>
+                          <Text style={styles.countryOptionName}>{item.name}</Text>
+                          <Text style={styles.countryOptionDial}>
+                            {item.dialCode}
+                            {item.example ? ` • ${item.example}` : ''}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+            </View>
+          </Modal>
+
         </KeyboardAvoidingView>
       </LinearGradient>
     </SafeAreaView>
@@ -378,14 +473,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginVertical: 16,
   },
+  checkboxTouchable: {
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
     borderColor: colors.gray,
-    marginRight: 12,
-    marginTop: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -398,15 +497,143 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  termsText: {
+  termsTextWrapper: {
     flex: 1,
+    paddingRight: 8,
+  },
+  termsText: {
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
   },
   termsLink: {
     color: colors.primary,
-    fontWeight: '500',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  inputLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  countryHint: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: colors.textLight,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(107, 114, 128, 0.2)',
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  inputErrorBorder: {
+    borderColor: colors.error,
+  },
+  countrySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRightWidth: 1,
+    borderColor: 'rgba(107, 114, 128, 0.16)',
+    marginRight: 12,
+  },
+  countryFlag: {
+    fontSize: 20,
+    marginRight: 6,
+  },
+  countryChevron: {
+    marginLeft: 4,
+  },
+
+  countryDial: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginRight: 4,
+  },
+  phoneTextInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  phoneErrorText: {
+    fontSize: 12,
+    color: colors.error,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    flex: 1,
+    width: '100%',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    maxHeight: '60%',
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 16,
+  },
+  countryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  countryOptionActive: {
+    backgroundColor: 'rgba(107, 127, 106, 0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  countryOptionFlag: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  countryOptionTextWrapper: {
+    flex: 1,
+  },
+  countryOptionName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  countryOptionDial: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  countryOptionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(107, 114, 128, 0.12)',
+    marginLeft: 44,
+    marginRight: 12,
   },
   errorText: {
     fontSize: 14,

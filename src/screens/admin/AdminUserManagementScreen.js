@@ -39,10 +39,25 @@ const buildUserName = (user) => {
 
 const UserListItem = ({ user, onPress }) => {
   const avatarSource = user?.photoURL || user?.avatar;
+  const isPending = user?.status === 'pending';
+  const isRejected = user?.status === 'rejected';
+
+  // Determine styling based on status
+  const itemStyle = [
+    styles.userItem,
+    isPending && styles.userItemPending,
+    isRejected && styles.userItemRejected
+  ];
+
+  const borderLeftStyle = isPending
+    ? { borderLeftWidth: 4, borderLeftColor: '#FBBF24' }
+    : isRejected
+    ? { borderLeftWidth: 4, borderLeftColor: '#F87171' }
+    : {};
 
   return (
     <TouchableOpacity style={styles.userItemWrapper} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.userItem}>
+      <View style={[...itemStyle, borderLeftStyle]}>
         <View style={styles.userAvatar}>
           {avatarSource ? (
             <Image source={{ uri: avatarSource }} style={styles.avatarImage} />
@@ -54,7 +69,21 @@ const UserListItem = ({ user, onPress }) => {
         </View>
 
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{buildUserName(user)}</Text>
+          <View style={styles.userNameRow}>
+            <Text style={styles.userName}>{buildUserName(user)}</Text>
+            {isPending && (
+              <View style={styles.statusBadge}>
+                <Ionicons name="time-outline" size={12} color="#D97706" />
+                <Text style={styles.statusBadgeText}>Beklemede</Text>
+              </View>
+            )}
+            {isRejected && (
+              <View style={[styles.statusBadge, styles.statusBadgeRejected]}>
+                <Ionicons name="close-circle-outline" size={12} color="#DC2626" />
+                <Text style={[styles.statusBadgeText, styles.statusBadgeTextRejected]}>Reddedildi</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.arrowContainer}>
@@ -102,6 +131,13 @@ export default function AdminUserManagementScreen({ navigation }) {
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return users.filter((user) => {
+      // Exclude deleted users - check multiple possible fields
+      if (user.deleted === true ||
+          user.isDeleted === true ||
+          user.membershipStatus === 'deleted') {
+        return false;
+      }
+
       const matchesStatus = selectedFilter === 'all' ? true : user.status === selectedFilter;
 
       if (!matchesStatus) return false;
@@ -129,11 +165,18 @@ export default function AdminUserManagementScreen({ navigation }) {
 
   const searchPlaceholder = 'Üye ara...';
 
+  // Count only non-deleted users
+  const activeUserCount = users.filter(user =>
+    !user.deleted &&
+    !user.isDeleted &&
+    user.membershipStatus !== 'deleted'
+  ).length;
+
   return (
     <View style={styles.container}>
       <UniqueHeader
         title="Üyeler"
-        subtitle={`${users.length} kayıtlı üye`}
+        subtitle={`${activeUserCount} kayıtlı üye`}
         showNotification={false}
       />
 
@@ -322,11 +365,46 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 14,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   userName: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
     textTransform: 'capitalize',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusBadgeRejected: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#D97706',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusBadgeTextRejected: {
+    color: '#DC2626',
+  },
+  userItemPending: {
+    backgroundColor: '#FFFBEB',
+  },
+  userItemRejected: {
+    backgroundColor: '#FEF2F2',
+    opacity: 0.7,
   },
   arrowContainer: {
     justifyContent: 'center',
