@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +20,13 @@ import { colors } from '../../constants/colors';
 import { useI18n } from '../../context/I18nContext';
 import { adminService } from '../../services/adminService';
 
-const formatDate = (value) => {
+const formatDate = (value, locale = 'tr') => {
   if (!value) return '-';
   try {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('tr-TR', {
+    const resolvedLocale = locale === 'tr' ? 'tr-TR' : locale === 'en' ? 'en-US' : locale || 'tr-TR';
+    return date.toLocaleDateString(resolvedLocale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -53,7 +56,7 @@ const ProgressBar = ({ label, value, total, color }) => {
 };
 
 export default function AdminUserMembershipScreen({ route, navigation }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const {
     userId,
     userName = 'Üye',
@@ -71,10 +74,55 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
   const [renewLoading, setRenewLoading] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
 
-  // Check if user has been approved and has a valid package
-  // If status is pending, they need approval first (show Approve button)
-  const isApproved = userStatus === 'approved';
+  const hideRenewModal = (resetState = false) => {
+    setShowRenewModal(false);
+    setShowDatePicker(false);
+    sheetTranslateY.setValue(0);
+    if (resetState) {
+      setSelectedPackage(null);
+      setStartDate(new Date());
+    }
+  };
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          sheetTranslateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.8) {
+          Animated.timing(sheetTranslateY, {
+            toValue: 600,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => hideRenewModal(true));
+        } else {
+          Animated.spring(sheetTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 0,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  useEffect(() => {
+    if (showRenewModal) {
+      sheetTranslateY.setValue(0);
+    }
+  }, [showRenewModal]);
+
+  // Treat frozen users as approved for renewal purposes
+  const APPROVED_STATUSES = ['approved', 'frozen', 'active'];
+  const isApproved = APPROVED_STATUSES.includes((userStatus || '').toLowerCase());
   const hasPackage = isApproved &&
     packageInfo &&
     packageInfo.packageId &&
@@ -82,6 +130,13 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
     packageInfo.packageName !== 'Üyelik bulunamadı' &&
     packageInfo.packageName !== 'Paket Atanmadı' &&
     packageInfo.packageName !== 'Tanımsız Paket';
+  const requiresApprovalFlow = !hasPackage;
+  const primaryActionGradient = hasPackage
+    ? [colors.primary, colors.primaryDark]
+    : ['#059669', '#047857'];
+  const primaryActionLabel = hasPackage ? 'Paketi Yenile' : 'Üyeyi Onayla';
+  const modalConfirmLabel = hasPackage ? 'Yenile' : 'Onayla';
+  const modalTitle = hasPackage ? 'Paket Yenile' : 'Üyeyi Onayla';
 
   const handleRenewPress = async () => {
     try {
@@ -103,12 +158,13 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
       return;
     }
 
-    const isApproval = !hasPackage;
-    const actionTitle = isApproval ? 'Paketi Onayla' : 'Paketi Yenile';
+    const isApproval = requiresApprovalFlow;
+    const actionTitle = isApproval ? 'Üyeyi Onayla' : 'Paketi Yenile';
     const actionButton = isApproval ? 'Onayla' : 'Yenile';
+    const resolvedLocale = language === 'tr' ? 'tr-TR' : language === 'en' ? 'en-US' : 'tr-TR';
     const actionMessage = isApproval
-      ? `${selectedPackage.name} paketi ile üyeyi onaylamak istediğinizden emin misiniz?\n\nBaşlangıç Tarihi: ${startDate.toLocaleDateString('tr-TR')}`
-      : `${selectedPackage.name} paketi ile üyeliği yenilemek istediğinizden emin misiniz?\n\nBaşlangıç Tarihi: ${startDate.toLocaleDateString('tr-TR')}`;
+      ? `${selectedPackage.name} paketi ile üyeyi onaylamak istediğinizden emin misiniz?\n\nBaşlangıç Tarihi: ${startDate.toLocaleDateString(resolvedLocale)}`
+      : `${selectedPackage.name} paketi ile üyeliği yenilemek istediğinizden emin misiniz?\n\nBaşlangıç Tarihi: ${startDate.toLocaleDateString(resolvedLocale)}`;
 
     Alert.alert(
       actionTitle,
@@ -134,9 +190,7 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
                   {
                     text: 'Tamam',
                     onPress: () => {
-                      setShowRenewModal(false);
-                      setSelectedPackage(null);
-                      setStartDate(new Date());
+                      hideRenewModal(true);
                       navigation.goBack();
                     },
                   },
@@ -317,30 +371,30 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
                 </View>
               ) : null}
             </View>
-
-            {userId && (
-              <TouchableOpacity style={styles.renewButton} onPress={handleRenewPress}>
-                <LinearGradient
-                  colors={hasPackage ? [colors.primary, colors.primaryDark] : ['#059669', '#047857']}
-                  style={styles.renewButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Ionicons
-                    name={hasPackage ? "refresh-outline" : "checkmark-circle-outline"}
-                    size={20}
-                    color={colors.white}
-                  />
-                  <Text style={styles.renewButtonText}>
-                    {hasPackage ? 'Paketi Yenile' : 'Üyeyi Onayla'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-
-            <View style={{ height: 80 }} />
           </>
         )}
+
+        {userId && (
+          <TouchableOpacity style={styles.renewButton} onPress={handleRenewPress}>
+            <LinearGradient
+              colors={primaryActionGradient}
+              style={styles.renewButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons
+                name={hasPackage ? "refresh-outline" : "checkmark-circle-outline"}
+                size={20}
+                color={colors.white}
+              />
+              <Text style={styles.renewButtonText}>
+                {primaryActionLabel}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 80 }} />
       </ScrollView>
 
       {/* Renew Package Modal */}
@@ -348,13 +402,25 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
         visible={showRenewModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowRenewModal(false)}
+        onRequestClose={() => hideRenewModal(true)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              { transform: [{ translateY: sheetTranslateY }] },
+            ]}
+          >
+            <View
+              style={styles.modalHandleArea}
+              {...sheetPanResponder.panHandlers}
+              hitSlop={{ top: 10, bottom: 10, left: 40, right: 40 }}
+            >
+              <View style={styles.modalHandle} />
+            </View>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{hasPackage ? 'Paket Yenile' : 'Üyeyi Onayla'}</Text>
-              <TouchableOpacity onPress={() => setShowRenewModal(false)}>
+              <Text style={styles.modalTitle}>{modalTitle}</Text>
+              <TouchableOpacity onPress={() => hideRenewModal()}>
                 <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -363,69 +429,87 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
               {userName} için paket seçin
             </Text>
 
-            {/* Start Date Picker */}
-            <View style={styles.datePickerSection}>
-              <Text style={styles.datePickerLabel}>Başlangıç Tarihi</Text>
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                <Text style={styles.datePickerText}>
-                  {startDate.toLocaleDateString('tr-TR')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.datePickerSection}>
+                <Text style={styles.datePickerLabel}>Başlangıç Tarihi</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                  <Text style={styles.datePickerText}>
+                    {startDate.toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-            {showDatePicker && (
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(Platform.OS === 'ios');
-                  if (selectedDate) {
-                    setStartDate(selectedDate);
-                  }
-                }}
-                minimumDate={new Date()}
-              />
-            )}
+              {showDatePicker && (
+                <View style={styles.nativePickerWrapper}>
+                  <DateTimePicker
+                    value={startDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, selectedDate) => {
+                      setShowDatePicker(Platform.OS === 'ios');
+                      if (selectedDate) {
+                        setStartDate(selectedDate);
+                      }
+                    }}
+                    minimumDate={new Date()}
+                    themeVariant="light"
+                    textColor={Platform.OS === 'ios' ? colors.textPrimary : undefined}
+                    style={Platform.OS === 'ios' ? styles.nativePicker : undefined}
+                  />
+                </View>
+              )}
 
-            <ScrollView style={styles.packageList} showsVerticalScrollIndicator={false}>
-              {packages.map((pkg) => {
-                const isSelected = selectedPackage?.id === pkg.id;
-                const lessonCount = pkg.classes || pkg.lessonCount || pkg.lessons || 0;
-                return (
-                  <TouchableOpacity
-                    key={pkg.id}
-                    style={[styles.packageItem, isSelected && styles.packageItemSelected]}
-                    onPress={() => setSelectedPackage(pkg)}
-                  >
-                    <View style={styles.packageInfo}>
-                      <Text style={styles.packageName}>{pkg.name}</Text>
-                      <Text style={styles.packageDetails}>
-                        {lessonCount} Ders - ₺{pkg.price || 0}
-                      </Text>
-                      {pkg.description && (
-                        <Text style={styles.packageDescription}>{pkg.description}</Text>
-                      )}
-                    </View>
-                    {isSelected && (
-                      <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+              <View style={styles.packageList}>
+                {packages.length === 0 ? (
+                  <View style={styles.emptyPackages}>
+                    <Ionicons name="alert-circle-outline" size={26} color={colors.textSecondary} />
+                    <Text style={styles.emptyPackagesText}>Aktif paket bulunamadı</Text>
+                    <Text style={styles.emptyPackagesSubtext}>
+                      Paket oluşturduktan sonra üyeyi onaylayabilirsiniz.
+                    </Text>
+                  </View>
+                ) : (
+                  packages.map((pkg) => {
+                    const isSelected = selectedPackage?.id === pkg.id;
+                    const lessonCount = pkg.classes || pkg.lessonCount || pkg.lessons || 0;
+                    return (
+                      <TouchableOpacity
+                        key={pkg.id}
+                        style={[styles.packageItem, isSelected && styles.packageItemSelected]}
+                        onPress={() => setSelectedPackage(pkg)}
+                      >
+                        <View style={styles.packageInfo}>
+                          <Text style={styles.packageName}>{pkg.name}</Text>
+                          <Text style={styles.packageDetails}>
+                            {lessonCount} Ders - ₺{pkg.price || 0}
+                          </Text>
+                          {pkg.description && (
+                            <Text style={styles.packageDescription}>{pkg.description}</Text>
+                          )}
+                        </View>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
             </ScrollView>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelButton}
-                onPress={() => {
-                  setShowRenewModal(false);
-                  setSelectedPackage(null);
-                }}
+                onPress={() => hideRenewModal(true)}
               >
                 <Text style={styles.modalCancelText}>İptal</Text>
               </TouchableOpacity>
@@ -435,7 +519,7 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
                 disabled={!selectedPackage || renewLoading}
               >
                 <LinearGradient
-                  colors={!selectedPackage ? ['#ccc', '#999'] : [colors.primary, colors.primaryDark]}
+                  colors={!selectedPackage ? ['#ccc', '#999'] : primaryActionGradient}
                   style={styles.modalConfirmGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -443,12 +527,12 @@ export default function AdminUserMembershipScreen({ route, navigation }) {
                   {renewLoading ? (
                     <ActivityIndicator size="small" color={colors.white} />
                   ) : (
-                    <Text style={styles.modalConfirmText}>Yenile</Text>
+                    <Text style={styles.modalConfirmText}>{modalConfirmLabel}</Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -660,15 +744,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
     justifyContent: 'flex-end',
+    paddingTop: 40,
   },
   modalContent: {
     backgroundColor: colors.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingHorizontal: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
+    paddingBottom: Platform.select({ ios: 32, default: 24 }),
+    maxHeight: '90%',
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  modalHandleArea: {
+    width: '100%',
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(15, 24, 16, 0.2)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -685,6 +785,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 16,
+  },
+  modalScroll: {
+    maxHeight: 360,
+  },
+  modalScrollContent: {
+    paddingBottom: 16,
+    paddingTop: 4,
   },
   datePickerSection: {
     marginBottom: 20,
@@ -712,7 +819,19 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   packageList: {
-    maxHeight: 300,
+    marginTop: 8,
+  },
+  nativePickerWrapper: {
+    marginBottom: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 24, 16, 0.06)',
+    paddingVertical: Platform.select({ ios: 6, default: 0 }),
+    paddingHorizontal: Platform.select({ ios: 6, default: 0 }),
+  },
+  nativePicker: {
+    width: '100%',
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
   },
   packageItem: {
     flexDirection: 'row',
@@ -747,6 +866,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     fontStyle: 'italic',
+  },
+  emptyPackages: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: 'rgba(107, 127, 106, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyPackagesText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  emptyPackagesSubtext: {
+    marginTop: 6,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   modalActions: {
     flexDirection: 'row',

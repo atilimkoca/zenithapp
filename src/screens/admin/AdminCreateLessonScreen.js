@@ -19,19 +19,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { useI18n } from '../../context/I18nContext';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { adminLessonService } from '../../services/lessonService';
 import UniqueHeader from '../../components/UniqueHeader';
 
-const formatDisplayDate = (date) =>
-  Number.isNaN(date.getTime())
-    ? '--/--'
-    : date.toLocaleDateString('tr-TR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
+const formatDisplayDate = (date, locale = 'tr') => {
+  if (Number.isNaN(date.getTime())) {
+    return '--/--';
+  }
+  const resolvedLocale = locale === 'tr' ? 'tr-TR' : locale === 'en' ? 'en-US' : 'tr-TR';
+  return date.toLocaleDateString(resolvedLocale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+};
 
 const formatDisplayTime = (date) =>
   Number.isNaN(date.getTime())
@@ -128,6 +132,7 @@ const getInitialScheduledDate = () => {
 
 export default function AdminCreateLessonScreen({ navigation }) {
   const { user, userData } = useAuth();
+  const { language } = useI18n();
   
   const scrollViewRef = useRef(null);
   const copyWeeksInputRef = useRef(null);
@@ -797,7 +802,7 @@ export default function AdminCreateLessonScreen({ navigation }) {
                 <Ionicons name="calendar" size={18} color={colors.primary} />
               </View>
               <Text style={styles.dateText}>
-                {formatDisplayDate(scheduledDate).split(' ').slice(0, 2).join(' ')}
+                {formatDisplayDate(scheduledDate, language).split(' ').slice(0, 2).join(' ')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -929,7 +934,7 @@ export default function AdminCreateLessonScreen({ navigation }) {
                       <Text style={styles.pickerPreviewValue}>
                         {activePicker === 'time'
                           ? selectedTimeSlot?.label || '--:--'
-                          : formatDisplayDate(tempPickerValue || new Date())}
+                          : formatDisplayDate(tempPickerValue || new Date(), language)}
                       </Text>
                       <View style={styles.pickerComponentWrapper}>
                         {activePicker === 'time' ? (

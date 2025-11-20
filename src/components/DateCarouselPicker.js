@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../constants/colors';
+import { useI18n } from '../context/I18nContext';
 
 const padNumber = (value) => value.toString().padStart(2, '0');
 
@@ -14,9 +15,12 @@ const parseDateKey = (key) => {
   return new Date(year, month - 1, day);
 };
 
-const buildItems = (dates) => {
+const buildItems = (dates, locale) => {
   const unique = Array.from(new Set(dates.filter(Boolean)));
   const sorted = unique.sort();
+
+  // Resolve locale to proper format
+  const resolvedLocale = locale === 'tr' ? 'tr-TR' : locale === 'en' ? 'en-US' : locale || 'en-US';
 
   return sorted.map((key) => {
     const dateInstance = parseDateKey(key);
@@ -25,7 +29,7 @@ const buildItems = (dates) => {
     }
 
     const dayLabel = dateInstance
-      .toLocaleDateString('en-US', { weekday: 'short' })
+      .toLocaleDateString(resolvedLocale, { weekday: 'short' })
       .toUpperCase();
 
     return {
@@ -46,8 +50,10 @@ export default function DateCarouselPicker({
   allLabel = 'All',
   theme = 'light',
 }) {
+  const { language } = useI18n();
+
   const items = useMemo(() => {
-    const baseItems = buildItems(dates);
+    const baseItems = buildItems(dates, language);
 
     if (allowClear) {
       return [
@@ -64,7 +70,7 @@ export default function DateCarouselPicker({
     }
 
     return baseItems;
-  }, [dates, allowClear, allLabel]);
+  }, [dates, allowClear, allLabel, language]);
 
   if (!items.length) {
     return null;

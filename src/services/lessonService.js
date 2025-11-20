@@ -1188,14 +1188,22 @@ const adminLessonService = {
       
       const userData = userDoc.data();
       const remainingCredits = userData.remainingClasses || userData.lessonCredits || 0;
-      
+
       if (remainingCredits <= 0) {
         return {
           success: false,
           message: 'Öğrencinin kalan dersi yok. Lütfen paket satın almasını sağlayın.'
         };
       }
-      
+
+      // Check if user is frozen
+      if (userData.membershipStatus === 'frozen' || userData.status === 'frozen') {
+        return {
+          success: false,
+          message: 'Bu öğrencinin üyeliği dondurulmuş. Dondurulmuş üyeler derse eklenemez.'
+        };
+      }
+
       const lessonRef = doc(db, 'lessons', lessonId);
       const lessonDoc = await getDoc(lessonRef);
       

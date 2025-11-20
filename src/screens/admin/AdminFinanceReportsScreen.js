@@ -13,12 +13,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { useI18n } from '../../context/I18nContext';
 import UniqueHeader from '../../components/UniqueHeader';
 
 const { width } = Dimensions.get('window');
 
 export default function AdminFinanceReportsScreen({ navigation }) {
   const { user, userData } = useAuth();
+  const { language } = useI18n();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState({
     totalRevenue: 0,
@@ -98,7 +100,7 @@ export default function AdminFinanceReportsScreen({ navigation }) {
       <View style={styles.transactionInfo}>
         <Text style={styles.transactionUser}>{transaction.user}</Text>
         <Text style={styles.transactionPackage}>{transaction.package}</Text>
-        <Text style={styles.transactionDate}>{new Date(transaction.date).toLocaleDateString('tr-TR')}</Text>
+        <Text style={styles.transactionDate}>{new Date(transaction.date).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US')}</Text>
       </View>
       <Text style={styles.transactionAmount}>₺{transaction.amount}</Text>
     </View>

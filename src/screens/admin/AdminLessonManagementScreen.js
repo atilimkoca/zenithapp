@@ -19,6 +19,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { useI18n } from '../../context/I18nContext';
 import { adminLessonService as lessonService } from '../../services/lessonService';
 import UniqueHeader from '../../components/UniqueHeader';
 import DateCarouselPicker from '../../components/DateCarouselPicker';
@@ -51,6 +52,7 @@ const formatDateKey = (value) => {
 
 export default function AdminLessonManagementScreen({ navigation }) {
   const { user, userData } = useAuth();
+  const { language } = useI18n();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lessons, setLessons] = useState([]);
@@ -390,7 +392,7 @@ export default function AdminLessonManagementScreen({ navigation }) {
               <View style={styles.detailGridItem}>
                 <Ionicons name="calendar" size={15} color={colors.primary} />
                 <Text style={styles.detailValue}>
-                  {new Date(lesson.scheduledDate).toLocaleDateString('tr-TR', {
+                  {new Date(lesson.scheduledDate).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', {
                     day: 'numeric',
                     month: 'short'
                   })}
@@ -682,8 +684,8 @@ export default function AdminLessonManagementScreen({ navigation }) {
                           </View>
                           <Text style={styles.infoCardLabel}>Tarih</Text>
                           <Text style={styles.infoCardValue}>
-                            {new Date(selectedLesson.scheduledDate).toLocaleDateString('tr-TR', { 
-                              day: 'numeric', 
+                            {new Date(selectedLesson.scheduledDate).toLocaleDateString(language === 'tr' ? 'tr-TR' : 'en-US', {
+                              day: 'numeric',
                               month: 'short',
                               year: 'numeric'
                             })}

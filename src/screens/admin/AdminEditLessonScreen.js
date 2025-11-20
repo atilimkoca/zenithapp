@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { useI18n } from '../../context/I18nContext';
 import { adminLessonService } from '../../services/lessonService';
 import UniqueHeader from '../../components/UniqueHeader';
 
@@ -110,14 +111,17 @@ const combineDateAndTime = (dateValue, timeString) => {
   return date;
 };
 
-const formatDisplayDate = (date) =>
-  Number.isNaN(date.getTime())
-    ? '--/--'
-    : date.toLocaleDateString('tr-TR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
+const formatDisplayDate = (date, locale = 'tr') => {
+  if (Number.isNaN(date.getTime())) {
+    return '--/--';
+  }
+  const resolvedLocale = locale === 'tr' ? 'tr-TR' : locale === 'en' ? 'en-US' : 'tr-TR';
+  return date.toLocaleDateString(resolvedLocale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+};
 
 const formatDisplayTime = (date) =>
   Number.isNaN(date.getTime())
@@ -177,6 +181,7 @@ const getEndTimePreview = (startDate, durationMinutes) => {
 export default function AdminEditLessonScreen({ navigation, route }) {
   const { lesson } = route.params;
   const { user } = useAuth();
+  const { language } = useI18n();
   const resolvedScheduledDate = combineDateAndTime(lesson.scheduledDate, lesson.startTime);
   const initialDuration = deriveDurationMinutes(lesson);
   const lessonTypeOptions = useMemo(() => {
@@ -535,7 +540,7 @@ export default function AdminEditLessonScreen({ navigation, route }) {
                   <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
                 </View>
                 <Text style={styles.metaLabel}>Tarih</Text>
-                <Text style={styles.metaValue}>{formatDisplayDate(scheduledDate)}</Text>
+                <Text style={styles.metaValue}>{formatDisplayDate(scheduledDate, language)}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

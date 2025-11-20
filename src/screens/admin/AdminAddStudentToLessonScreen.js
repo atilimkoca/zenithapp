@@ -240,6 +240,7 @@ export default function AdminAddStudentToLessonScreen({ navigation, route }) {
             filteredStudents.map((student) => {
               const enrolled = isStudentEnrolled(student.id);
               const isProcessing = addingStudent === student.id;
+              const isFrozen = student.membershipStatus === 'frozen' || student.status === 'frozen';
 
               return (
                 <View key={student.id} style={styles.studentCard}>
@@ -248,7 +249,19 @@ export default function AdminAddStudentToLessonScreen({ navigation, route }) {
                       <Ionicons name="person" size={24} color={colors.white} />
                     </View>
                     <View style={styles.studentDetails}>
-                      <Text style={styles.studentName}>{student.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.studentName}>{student.name}</Text>
+                        {enrolled && (
+                          <View style={styles.enrolledBadge}>
+                            <Text style={styles.enrolledBadgeText}>Kayıtlı</Text>
+                          </View>
+                        )}
+                        {isFrozen && (
+                          <View style={styles.frozenBadge}>
+                            <Text style={styles.frozenBadgeText}>❄️ Donduruldu</Text>
+                          </View>
+                        )}
+                      </View>
                       {student.email && (
                         <Text style={styles.studentContact}>{student.email}</Text>
                       )}
@@ -277,9 +290,9 @@ export default function AdminAddStudentToLessonScreen({ navigation, route }) {
                     </TouchableOpacity>
                   ) : (
                     <TouchableOpacity
-                      style={[styles.addButton, (isFull || isPastLesson) && styles.addButtonDisabled]}
+                      style={[styles.addButton, (isFull || isPastLesson || isFrozen) && styles.addButtonDisabled]}
                       onPress={() => handleAddStudent(student)}
-                      disabled={isProcessing || isFull || isPastLesson}
+                      disabled={isProcessing || isFull || isPastLesson || isFrozen}
                     >
                       {isProcessing ? (
                         <ActivityIndicator size="small" color={colors.white} />
@@ -287,7 +300,7 @@ export default function AdminAddStudentToLessonScreen({ navigation, route }) {
                         <>
                           <Ionicons name="add-circle" size={20} color={colors.white} />
                           <Text style={styles.addButtonText}>
-                            {isPastLesson ? 'Geçmiş' : isFull ? 'Dolu' : 'Ekle'}
+                            {isFrozen ? 'Dondurulmuş' : isPastLesson ? 'Geçmiş' : isFull ? 'Dolu' : 'Ekle'}
                           </Text>
                         </>
                       )}
@@ -482,5 +495,27 @@ const styles = StyleSheet.create({
   },
   removeButtonTextDisabled: {
     color: colors.textSecondary,
+  },
+  enrolledBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  enrolledBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  frozenBadge: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  frozenBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.white,
   },
 });
